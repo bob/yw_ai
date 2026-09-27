@@ -1,0 +1,160 @@
+"""Streamlit rendering for public yoga sequences."""
+
+import time
+from html import escape
+from typing import TypedDict
+
+import streamlit as st
+
+from langchain_app.schemas import Language
+
+
+class AsanaThumbnail(TypedDict):
+    image_url: str
+    alt: str
+    start_mirror: bool
+    end_mirror: bool
+
+
+class SequenceInfo(TypedDict):
+    id: int
+    name: str
+    description: str | None
+    language: Language
+    elements_count: int
+
+
+class SequenceView(TypedDict):
+    info: SequenceInfo
+    thumbnails: list[AsanaThumbnail]
+
+
+class SequenceRenderer:
+    """Render sequence details and thumbnails in a Streamlit app."""
+
+    def __init__(
+        self,
+        *,
+        thumbnail_size: int = 64,
+        stream_delay_seconds: float = 0.1,
+    ) -> None:
+        self._thumbnail_size = thumbnail_size
+        self._stream_delay_seconds = stream_delay_seconds
+
+    def render_styles(self) -> None:
+        """Add the styles used by all sequence thumbnails on the page."""
+
+        st.html(
+            f"""
+            <style>
+            .mirror-thumbnail {{
+                --thumbnail-size: {self._thumbnail_size}px;
+                --bracket-color: green;
+                --bracket-stroke: 2px;
+
+                position: relative;
+                display: block;
+                width: var(--thumbnail-size);
+                height: var(--thumbnail-size);
+            }}
+            .mirror-thumbnail img {{
+                display: block;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 10px;
+            }}
+            .mirror-thumbnail__bracket {{
+                position: absolute;
+                top: 6px;
+                bottom: 6px;
+                width: 8px;
+                border-top: var(--bracket-stroke) solid var(--bracket-color);
+                border-bottom: var(--bracket-stroke) solid var(--bracket-color);
+                pointer-events: none;
+            }}
+            .mirror-thumbnail__bracket--start {{
+                left: 4px;
+                border-left: var(--bracket-stroke) solid var(--bracket-color);
+            }}
+            .mirror-thumbnail__bracket--end {{
+                right: 4px;
+                border-right: var(--bracket-stroke) solid var(--bracket-color);
+            }}
+            [class*="stElementToolbar"] {{
+                visibility: hidden;
+            }}
+            </style>
+            """
+        )
+
+    def render(
+        self,
+        sequence: SequenceView | None,
+        *,
+        key: str,
+        stream: bool = False,
+    ) -> None:
+        """Render a sequence, optionally revealing its thumbnails over time."""
+
+        if sequence is None:
+            return
+
+        self._render_info(sequence["info"])
+        self._render_images(
+            sequence["thumbnails"],
+            key=key,
+            delay_seconds=self._stream_delay_seconds if stream else None,
+        )
+
+    @staticmethod
+    def _render_info(sequence_info: SequenceInfo) -> None:
+        st.markdown(f"**{sequence_info['name']}**")
+
+        if sequence_info["description"]:
+            st.markdown(sequence_info["description"])
+
+        st.caption(
+            f"Sequence #{sequence_info['id']} · "
+            f"{sequence_info['elements_count']} poses · "
+            f"{sequence_info['language'].upper()}"
+        )
+
+    @staticmethod
+    def _thumbnail_html(thumbnail: AsanaThumbnail) -> str:
+        brackets = ""
+        if thumbnail["start_mirror"]:
+            brackets += (
+                '<span class="mirror-thumbnail__bracket '
+                'mirror-thumbnail__bracket--start" aria-hidden="true"></span>'
+            )
+        if thumbnail["end_mirror"]:
+            brackets += (
+                '<span class="mirror-thumbnail__bracket '
+                'mirror-thumbnail__bracket--end" aria-hidden="true"></span>'
+            )
+
+        return (
+            '<div class="mirror-thumbnail">'
+            f'<img src="{escape(thumbnail["image_url"], quote=True)}" '
+            f'alt="{escape(thumbnail["alt"], quote=True)}">'
+            f"{brackets}"
+            "</div>"
+        )
+
+    def _render_images(
+        self,
+        thumbnails: list[AsanaThumbnail],
+        *,
+        key: str,
+        delay_seconds: float | None,
+    ) -> None:
+        if not thumbnails:
+            return
+
+        with st.container(key=key, horizontal=True, wrap=True, gap="xxsmall"):
+            for index, thumbnail in enumerate(thumbnails):
+                st.html(self._thumbnail_html(thumbnail), width="content")
+
+                if delay_seconds is not None and index < len(thumbnails) - 1:
+                    time.sleep(delay_seconds)
