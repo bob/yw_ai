@@ -1,4 +1,6 @@
 import os
+import time
+from collections.abc import Iterable, Iterator
 from typing import Literal, NotRequired, TypedDict, cast
 
 import streamlit as st
@@ -17,6 +19,7 @@ load_dotenv()
 
 SEQUENCE_ID = 199
 SEQUENCE_LANGUAGE: Language = "en"
+THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 ASANA_SERVICE_BASE_URL = os.getenv(
     "ASANA_SERVICE_BASE_URL", "http://0.0.0.0:4999"
 )
@@ -59,6 +62,18 @@ def get_sequence_view(
     }
 
 
+def get_thumbnails_one_by_one(
+    thumbnails: Iterable[AsanaThumbnail],
+    *,
+    delay_seconds: float = THUMBNAIL_STREAM_DELAY_SECONDS,
+) -> Iterator[AsanaThumbnail]:
+    """Yield thumbnails as they become available from the sequence source."""
+
+    for thumbnail in thumbnails:
+        time.sleep(delay_seconds)
+        yield thumbnail
+
+
 st.title("Sequence Viewer")
 
 sequence_renderer = SequenceRenderer()
@@ -91,36 +106,42 @@ for message_index, message in enumerate(messages):
 # if prompt := st.chat_input("What is up?"):
 prompt = "What is up?"
 
-# Add user message to chat history
-messages.append({"role": "user", "content": prompt})
-# Display user message in chat message container
-with st.chat_message("user"):
-    st.markdown(prompt)
+if prompt := st.chat_input("What is up?"):
+    # Add user message to chat history
+    messages.append({"role": "user", "content": prompt})
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-with st.chat_message("assistant"):
-    # Here you would typically generate the assistant's response
-    assistant_response = "This is a placeholder response from the assistant."
-    st.markdown(assistant_response)
+    with st.chat_message("assistant"):
+        # Here you would typically generate the assistant's response
+        assistant_response = "This is a placeholder response from the assistant."
+        st.markdown(assistant_response)
 
-    try:
-        assistant_sequence = get_sequence_view(
-            ASANA_SERVICE_BASE_URL, SEQUENCE_ID, SEQUENCE_LANGUAGE
+        try:
+            assistant_sequence = get_sequence_view(
+                ASANA_SERVICE_BASE_URL, SEQUENCE_ID, SEQUENCE_LANGUAGE
+            )
+        except SequenceServiceError as exc:
+            st.error(f"Could not load sequence {SEQUENCE_ID}: {exc}")
+            assistant_sequence = None
+        else:
+            live_sequence = SequenceView(
+                info=assistant_sequence["info"],
+                thumbnails=get_thumbnails_one_by_one(
+                    assistant_sequence["thumbnails"]
+                ),
+            )
+            sequence_renderer.render(
+                live_sequence,
+                key="assistant-sequence-live",
+            )
+
+        # Add assistant message to chat history
+        messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_response,
+                "sequence": assistant_sequence,
+            }
         )
-    except SequenceServiceError as exc:
-        st.error(f"Could not load sequence {SEQUENCE_ID}: {exc}")
-        assistant_sequence = None
-    else:
-        sequence_renderer.render(
-            assistant_sequence,
-            key="assistant-sequence-live",
-            stream=True,
-        )
-
-    # Add assistant message to chat history
-    messages.append(
-        {
-            "role": "assistant",
-            "content": assistant_response,
-            "sequence": assistant_sequence,
-        }
-    )

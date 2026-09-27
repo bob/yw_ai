@@ -1,6 +1,6 @@
 """Streamlit rendering for public yoga sequences."""
 
-import time
+from collections.abc import Iterable
 from html import escape
 from typing import TypedDict
 
@@ -26,7 +26,7 @@ class SequenceInfo(TypedDict):
 
 class SequenceView(TypedDict):
     info: SequenceInfo
-    thumbnails: list[AsanaThumbnail]
+    thumbnails: Iterable[AsanaThumbnail]
 
 
 class SequenceRenderer:
@@ -36,10 +36,8 @@ class SequenceRenderer:
         self,
         *,
         thumbnail_size: int = 64,
-        stream_delay_seconds: float = 0.1,
     ) -> None:
         self._thumbnail_size = thumbnail_size
-        self._stream_delay_seconds = stream_delay_seconds
 
     def render_styles(self) -> None:
         """Add the styles used by all sequence thumbnails on the page."""
@@ -93,9 +91,8 @@ class SequenceRenderer:
         sequence: SequenceView | None,
         *,
         key: str,
-        stream: bool = False,
     ) -> None:
-        """Render a sequence, optionally revealing its thumbnails over time."""
+        """Render a sequence as its thumbnails become available."""
 
         if sequence is None:
             return
@@ -104,7 +101,6 @@ class SequenceRenderer:
         self._render_images(
             sequence["thumbnails"],
             key=key,
-            delay_seconds=self._stream_delay_seconds if stream else None,
         )
 
     @staticmethod
@@ -144,17 +140,10 @@ class SequenceRenderer:
 
     def _render_images(
         self,
-        thumbnails: list[AsanaThumbnail],
+        thumbnails: Iterable[AsanaThumbnail],
         *,
         key: str,
-        delay_seconds: float | None,
     ) -> None:
-        if not thumbnails:
-            return
-
         with st.container(key=key, horizontal=True, wrap=True, gap="xxsmall"):
-            for index, thumbnail in enumerate(thumbnails):
+            for thumbnail in thumbnails:
                 st.html(self._thumbnail_html(thumbnail), width="content")
-
-                if delay_seconds is not None and index < len(thumbnails) - 1:
-                    time.sleep(delay_seconds)
