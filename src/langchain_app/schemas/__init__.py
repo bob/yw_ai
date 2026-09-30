@@ -1,5 +1,6 @@
-"""Pydantic schemas used by the application."""
+"""Schemas used by the application."""
 
+from langchain_app.schemas.chat import ChatMessage
 from langchain_app.schemas.sequence import (
     CatalogItemSchema,
     Language,
@@ -9,6 +10,7 @@ from langchain_app.schemas.sequence import (
 
 __all__ = [
     "CatalogItemSchema",
+    "ChatMessage",
     "Language",
     "SequenceElementSchema",
     "SequenceSchema",

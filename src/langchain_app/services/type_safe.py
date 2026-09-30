@@ -28,7 +28,7 @@ class TypeSafeService:
         "Prefer alternating between flexion and extension poses.",
         "Add at least one twist pose.",
         "Do not use 'starting' poses except at the beginning of the sequence.",
-        "Prefer ending with a paschimottanasana pose."
+        "Prefer ending with a finishing pose."
     )
 
     def __init__(

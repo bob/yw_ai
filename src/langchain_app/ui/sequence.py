@@ -8,11 +8,7 @@ from typing import TypedDict
 import streamlit as st
 
 from langchain_app.schemas import CatalogItemSchema, Language
-from langchain_app.services import (
-    CatalogItemService,
-    SequenceService,
-    TypeSafeService,
-)
+from langchain_app.services import SequenceService
 
 THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 
@@ -80,35 +76,11 @@ def get_sequence_view(
 
 
 def generate_thumbnails_one_by_one(
-    catalog_item_service: CatalogItemService,
-    type_safe_service: TypeSafeService,
-    *,
-    language: Language,
-    request: str | None,
-    count: int,
+    catalog_items: Iterable[CatalogItemSchema],
 ) -> Iterator[AsanaThumbnail]:
-    """Select catalog items with Jev and yield their thumbnails one by one."""
+    """Convert catalog items to thumbnails one by one."""
 
-    if count < 0:
-        raise ValueError("count must not be negative")
-
-    user_request: str = request or ""
-    catalog_items = [
-        item
-        for item in catalog_item_service.search(language=language)
-        if item.image_url is not None
-    ]
-    selected_items: list[CatalogItemSchema] = []
-
-    for _ in range(count):
-        catalog_item = type_safe_service.choose_next_catalog_item(
-            catalog_items,
-            selected_items=selected_items,
-            request=user_request,
-            elements_count=count,
-        )
-        selected_items.append(catalog_item)
-
+    for catalog_item in catalog_items:
         if catalog_item.image_url is None:
             continue
 

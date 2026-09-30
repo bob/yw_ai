@@ -1,20 +1,18 @@
 import os
 from collections.abc import Iterator
-from typing import Literal, NotRequired, TypedDict, cast
+from typing import cast
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from langchain_app.schemas import Language
+from langchain_app.dependencies import get_sequence_generator
+from langchain_app.schemas import ChatMessage, Language
 from langchain_app.services import (
-    CatalogItemService,
     CatalogItemServiceError,
-    TypeSafeService,
     TypeSafeServiceError,
 )
 from langchain_app.ui import (
     AsanaThumbnail,
-    SequenceInfo,
     SequenceRenderer,
     SequenceView,
     create_sequence_view,
@@ -31,29 +29,6 @@ ASANA_SERVICE_BASE_URL = os.getenv(
 ASANA_CATALOG_FOLDER_UUID = os.getenv(
     "ASANA_CATALOG_FOLDER_UUID", "yoga-public-v1"
 )
-
-
-@st.cache_resource
-def get_catalog_item_service(
-    base_url: str, catalog_folder_uuid: str
-) -> CatalogItemService:
-    return CatalogItemService(
-        base_url=base_url,
-        catalog_folder_uuid=catalog_folder_uuid,
-    )
-
-
-@st.cache_resource
-def get_type_safe_service() -> TypeSafeService:
-    return TypeSafeService()
-
-
-class ChatMessage(TypedDict):
-    role: Literal["user", "assistant"]
-    content: str
-    sequence: NotRequired[SequenceView | None]
-    sequence_info: NotRequired[SequenceInfo]
-    thumbnails: NotRequired[list[AsanaThumbnail]]
 
 
 st.title("Sequence Viewer")
@@ -86,11 +61,13 @@ for message_index, message in enumerate(messages):
         )
 
 if prompt := st.chat_input("What is up?"):
+    sequence_request: str = prompt
+
     # Add user message to chat history
-    messages.append({"role": "user", "content": prompt})
+    messages.append({"role": "user", "content": sequence_request})
     # Display user message in chat message container
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(sequence_request)
 
     with st.chat_message("assistant"):
         # Here you would typically generate the assistant's response
@@ -102,17 +79,16 @@ if prompt := st.chat_input("What is up?"):
         generated_thumbnails: list[AsanaThumbnail] = []
 
         def remember_generated_thumbnails() -> Iterator[AsanaThumbnail]:
-            catalog_item_service = get_catalog_item_service(
+            sequence_generator = get_sequence_generator(
                 ASANA_SERVICE_BASE_URL,
                 ASANA_CATALOG_FOLDER_UUID,
             )
-            type_safe_service = get_type_safe_service()
             for thumbnail in generate_thumbnails_one_by_one(
-                catalog_item_service,
-                type_safe_service,
-                language=SEQUENCE_LANGUAGE,
-                request=prompt,
-                count=SEQUENCE_ELEMENTS_COUNT,
+                sequence_generator.generate(
+                    sequence_request,
+                    language=SEQUENCE_LANGUAGE,
+                    count=SEQUENCE_ELEMENTS_COUNT,
+                )
             ):
                 generated_thumbnails.append(thumbnail)
                 yield thumbnail
