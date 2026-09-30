@@ -15,10 +15,10 @@ class ApiSchema(BaseModel):
 
 
 class CatalogItemSchema(ApiSchema):
-    """Localized catalog item embedded in a sequence element."""
+    """Localized catalog item returned by the public catalog APIs."""
 
     id: PositiveInt
-    uuid: str
+    uuid: str | None
     name: str
     bilateral: bool
     image_url: HttpUrl | None

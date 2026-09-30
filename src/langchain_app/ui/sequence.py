@@ -1,12 +1,20 @@
 """Streamlit rendering for public yoga sequences."""
 
-from collections.abc import Iterable
+import time
+from collections.abc import Iterable, Iterator
 from html import escape
 from typing import TypedDict
 
 import streamlit as st
 
-from langchain_app.schemas import Language
+from langchain_app.schemas import CatalogItemSchema, Language
+from langchain_app.services import (
+    CatalogItemService,
+    SequenceService,
+    TypeSafeService,
+)
+
+THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 
 
 class AsanaThumbnail(TypedDict):
@@ -27,6 +35,101 @@ class SequenceInfo(TypedDict):
 class SequenceView(TypedDict):
     info: SequenceInfo
     thumbnails: Iterable[AsanaThumbnail]
+
+
+def create_sequence_view(language: Language) -> SequenceView:
+    return {
+        "info": {
+            "id": 0,
+            "name": "New Sequence",
+            "description": None,
+            "language": language,
+            "elements_count": 0,
+        },
+        "thumbnails": [],
+    }
+
+
+@st.cache_data(ttl=300)
+def get_sequence_view(
+    base_url: str, sequence_id: int, language: Language
+) -> SequenceView:
+    with SequenceService(base_url=base_url) as service:
+        sequence = service.get_by_id(sequence_id, language=language)
+
+    return {
+        "info": {
+            "id": sequence.id,
+            "name": sequence.name,
+            "description": sequence.description,
+            "language": sequence.lang,
+            "elements_count": sequence.elements_count,
+        },
+        "thumbnails": [
+            {
+                "image_url": str(element.catalog_item.image_url),
+                "alt": element.catalog_item.name,
+                "start_mirror": element.start_mirror,
+                "end_mirror": element.end_mirror,
+            }
+            for element in sequence.elements
+            if element.catalog_item is not None
+            and element.catalog_item.image_url is not None
+        ],
+    }
+
+
+def generate_thumbnails_one_by_one(
+    catalog_item_service: CatalogItemService,
+    type_safe_service: TypeSafeService,
+    *,
+    language: Language,
+    request: str | None,
+    count: int,
+) -> Iterator[AsanaThumbnail]:
+    """Select catalog items with Jev and yield their thumbnails one by one."""
+
+    if count < 0:
+        raise ValueError("count must not be negative")
+
+    user_request: str = request or ""
+    catalog_items = [
+        item
+        for item in catalog_item_service.search(language=language)
+        if item.image_url is not None
+    ]
+    selected_items: list[CatalogItemSchema] = []
+
+    for _ in range(count):
+        catalog_item = type_safe_service.choose_next_catalog_item(
+            catalog_items,
+            selected_items=selected_items,
+            request=user_request,
+            elements_count=count,
+        )
+        selected_items.append(catalog_item)
+
+        if catalog_item.image_url is None:
+            continue
+
+        yield {
+            "image_url": str(catalog_item.image_url),
+            "alt": catalog_item.name,
+            "start_mirror": catalog_item.bilateral,
+            "end_mirror": catalog_item.bilateral,
+        }
+
+
+def get_thumbnails_one_by_one(
+    thumbnails: Iterable[AsanaThumbnail],
+    *,
+    delay_seconds: float = THUMBNAIL_STREAM_DELAY_SECONDS,
+) -> Iterator[AsanaThumbnail]:
+    """Yield thumbnails as they become available from the sequence source."""
+
+    for thumbnail in thumbnails:
+        time.sleep(delay_seconds)
+        yield thumbnail
 
 
 class SequenceRenderer:

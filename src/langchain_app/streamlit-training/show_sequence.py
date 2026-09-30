@@ -103,9 +103,6 @@ for message_index, message in enumerate(messages):
             key=f"assistant-sequence-{message_index}",
         )
 
-# if prompt := st.chat_input("What is up?"):
-prompt = "What is up?"
-
 if prompt := st.chat_input("What is up?"):
     # Add user message to chat history
     messages.append({"role": "user", "content": prompt})

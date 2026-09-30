@@ -5,6 +5,10 @@ from langchain_app.ui.sequence import (
     SequenceInfo,
     SequenceRenderer,
     SequenceView,
+    create_sequence_view,
+    generate_thumbnails_one_by_one,
+    get_sequence_view,
+    get_thumbnails_one_by_one,
 )
 
 __all__ = [
@@ -12,4 +16,8 @@ __all__ = [
     "SequenceInfo",
     "SequenceRenderer",
     "SequenceView",
+    "create_sequence_view",
+    "generate_thumbnails_one_by_one",
+    "get_sequence_view",
+    "get_thumbnails_one_by_one",
 ]
