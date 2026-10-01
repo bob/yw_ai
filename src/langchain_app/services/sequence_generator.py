@@ -1,7 +1,7 @@
 """Generate yoga sequences from catalog items."""
 
 from collections.abc import Iterator
-from random import choice
+from random import choice, sample
 
 from langchain_app.schemas import CatalogItemSchema, Language
 from langchain_app.services.catalog_item import CatalogItemService
@@ -53,8 +53,15 @@ class SequenceGenerator:
         yield starting_item
 
         for _ in range(count - 1):
+            candidates = catalog_items
+            if len(selected_items) < count - 1:
+                selected_ids = {item.id for item in selected_items}
+                available_items = [
+                    item for item in catalog_items if item.id not in selected_ids
+                ]
+                candidates = sample(available_items, min(10, len(available_items)))
             catalog_item = self._type_safe_service.choose_next_catalog_item(
-                catalog_items,
+                candidates,
                 selected_items=selected_items,
                 request=request,
                 elements_count=count,
