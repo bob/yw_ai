@@ -1,14 +1,19 @@
 """Streamlit rendering for public yoga sequences."""
 
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from html import escape
 from typing import TypedDict
 
 import streamlit as st
 
-from langchain_app.schemas import CatalogItemSchema, Language
-from langchain_app.services import SequenceService
+from langchain_app.schemas import CatalogItemSchema, ChatMessage, Language
+from langchain_app.services import (
+    CatalogItemServiceError,
+    SequenceGenerator,
+    SequenceService,
+    TypeSafeServiceError,
+)
 
 THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 
@@ -111,8 +116,135 @@ class SequenceRenderer:
         self,
         *,
         thumbnail_size: int = 64,
+        generator_factory: Callable[[], SequenceGenerator] | None = None,
+        language: Language = "en",
+        elements_count: int = 9,
     ) -> None:
         self._thumbnail_size = thumbnail_size
+        self._generator_factory = generator_factory
+        self._language = language
+        self._elements_count = elements_count
+
+    def render_generated_sequence(
+        self, request: str, *, key: str
+    ) -> SequenceView | None:
+        """Generate from the original request and retain only a complete result."""
+        if self._generator_factory is None:
+            raise ValueError("A generator factory is required to generate sequences")
+        generator_factory = self._generator_factory
+        sequence = create_sequence_view(self._language)
+        sequence["info"]["elements_count"] = self._elements_count
+        thumbnails: list[AsanaThumbnail] = []
+
+        def remember_thumbnails() -> Iterator[AsanaThumbnail]:
+            generator = generator_factory()
+            for thumbnail in generate_thumbnails_one_by_one(
+                generator.generate(
+                    request, language=self._language, count=self._elements_count
+                )
+            ):
+                thumbnails.append(thumbnail)
+                yield thumbnail
+
+        try:
+            self.render(
+                SequenceView(info=sequence["info"], thumbnails=remember_thumbnails()),
+                key=key,
+            )
+        except (CatalogItemServiceError, TypeSafeServiceError, ValueError) as exc:
+            st.error(f"Could not create sequence: {exc}")
+            return None
+
+        sequence["thumbnails"] = thumbnails
+        sequence["info"]["elements_count"] = len(thumbnails)
+        return sequence
+
+    def render_messages(self, messages: list[ChatMessage]) -> None:
+        """Display chat history with controls for each generated sequence."""
+        for message_index, message in enumerate(messages):
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                self._render_message_sequence(messages, message_index)
+
+    def _render_message_sequence(
+        self, messages: list[ChatMessage], message_index: int
+    ) -> None:
+        message = messages[message_index]
+        stored_sequence = message.get("sequence")
+        if stored_sequence is None and (
+            stored_sequence_info := message.get("sequence_info")
+        ):
+            stored_sequence = SequenceView(
+                info=stored_sequence_info,
+                thumbnails=message.get("thumbnails", []),
+            )
+        if stored_sequence is None:
+            return
+
+        variants = message.setdefault("sequence_variants", [stored_sequence])
+        selected = message.setdefault("selected_sequence_index", 0)
+        # Older session messages did not retain their original request.
+        request = message.get("sequence_request")
+        if request is None:
+            request = next(
+                (
+                    previous["content"]
+                    for previous in reversed(messages[:message_index])
+                    if previous["role"] == "user"
+                ),
+                None,
+            )
+            if request is not None:
+                message["sequence_request"] = request
+
+        key = f"assistant-sequence-{message_index}"
+        with st.container(horizontal=True, vertical_alignment="center"):
+            regenerate = st.button(
+                "Regenerate", key=f"{key}-regenerate", disabled=request is None
+            )
+            if st.button(
+                "Previous sequence", icon=":material/chevron_left:",
+                key=f"{key}-previous", disabled=selected == 0,
+            ):
+                selected -= 1
+            st.caption(f"{selected + 1} / {len(variants)}")
+            if st.button(
+                "Next sequence", icon=":material/chevron_right:",
+                key=f"{key}-next", disabled=selected == len(variants) - 1,
+            ):
+                selected += 1
+
+        if selected != message.get("selected_sequence_index", 0):
+            message["selected_sequence_index"] = selected
+            message["sequence"] = variants[selected]
+            st.rerun()
+        message["sequence"] = variants[selected]
+        self.render(variants[selected], key=key)
+
+        if regenerate and request is not None:
+            with st.container():
+                new_sequence = self.render_generated_sequence(
+                    request, key=f"{key}-live"
+                )
+            if new_sequence is not None:
+                variants.append(new_sequence)
+                message["selected_sequence_index"] = len(variants) - 1
+                message["sequence"] = new_sequence
+                st.rerun()
+
+    def render_response(self, request: str, *, content: str, key: str) -> ChatMessage:
+        """Stream a new assistant sequence and return its session message."""
+        with st.chat_message("assistant"):
+            st.markdown(content)
+            sequence = self.render_generated_sequence(request, key=key)
+        return {
+            "role": "assistant",
+            "content": content,
+            "sequence": sequence,
+            "sequence_request": request,
+            "sequence_variants": [sequence] if sequence is not None else [],
+            "selected_sequence_index": 0,
+        }
 
     def render_styles(self) -> None:
         """Add the styles used by all sequence thumbnails on the page."""
