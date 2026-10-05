@@ -13,7 +13,8 @@ from langchain_app.ui.sequence_import import render_sequence_import
 from langchain_app.schemas import CatalogItemSchema, ChatMessage, Language
 from langchain_app.services import (
     CatalogItemServiceError,
-    SequenceGenerator,
+    SequenceAgent,
+    SequenceAgentError,
     SequenceService,
     TypeSafeServiceError,
 )
@@ -130,15 +131,13 @@ class SequenceRenderer:
         self,
         *,
         thumbnail_size: int = 64,
-        generator_factory: Callable[[], SequenceGenerator] | None = None,
+        generator_factory: Callable[[], SequenceAgent] | None = None,
         language: Language = "en",
-        elements_count: int = 9,
         catalog_url: str | None = None,
     ) -> None:
         self._thumbnail_size = thumbnail_size
         self._generator_factory = generator_factory
         self._language: Language = language
-        self._elements_count = elements_count
         self._catalog_url = catalog_url
 
     def render_generated_sequence(
@@ -149,15 +148,12 @@ class SequenceRenderer:
             raise ValueError("A generator factory is required to generate sequences")
         generator_factory = self._generator_factory
         sequence = create_sequence_view(self._language)
-        sequence["info"]["elements_count"] = self._elements_count
         thumbnails: list[AsanaThumbnail] = []
 
         def remember_thumbnails() -> Iterator[AsanaThumbnail]:
             generator = generator_factory()
             for thumbnail in generate_thumbnails_one_by_one(
-                generator.generate(
-                    request, language=self._language, count=self._elements_count
-                )
+                generator.generate(request, language=self._language)
             ):
                 thumbnails.append(thumbnail)
                 yield thumbnail
@@ -167,7 +163,9 @@ class SequenceRenderer:
                 SequenceView(info=sequence["info"], thumbnails=remember_thumbnails()),
                 key=key,
             )
-        except (CatalogItemServiceError, TypeSafeServiceError, ValueError) as exc:
+        except (
+            CatalogItemServiceError, TypeSafeServiceError, SequenceAgentError, ValueError
+        ) as exc:
             st.error(f"Could not create sequence: {exc}")
             return None
 
@@ -345,9 +343,10 @@ class SequenceRenderer:
         if sequence_info["description"]:
             st.markdown(sequence_info["description"])
 
+        count = sequence_info["elements_count"]
+        count_label = f"{count} poses · " if count else ""
         st.caption(
-            f"Sequence #{sequence_info['id']} · "
-            f"{sequence_info['elements_count']} poses · "
+            f"Sequence #{sequence_info['id']} · {count_label}"
             f"{sequence_info['language'].upper()}"
         )
 

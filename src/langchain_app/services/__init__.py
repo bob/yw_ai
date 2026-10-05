@@ -14,6 +14,7 @@ from langchain_app.services.sequence import (
     SequenceValidationError,
 )
 from langchain_app.services.sequence_generator import SequenceGenerator
+from langchain_app.services.sequence_agent import SequenceAgent, SequenceAgentError
 from langchain_app.services.type_safe import (
     TypeSafeSelectionError,
     TypeSafeService,
@@ -31,6 +32,8 @@ __all__ = [
     "SequenceServiceError",
     "SequenceValidationError",
     "SequenceGenerator",
+    "SequenceAgent",
+    "SequenceAgentError",
     "TypeSafeSelectionError",
     "TypeSafeService",
     "TypeSafeServiceError",

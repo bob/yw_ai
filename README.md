@@ -1,5 +1,23 @@
 # LangChain app
 
+The Sequence Generator keeps the pose count and **Generate** at the top and a
+chat prompt at the bottom. **Generate** fills and submits a text request such as
+`Generate a yoga sequence with 12 poses.` You can also type a request directly.
+Both paths send the same kind of prompt to a LangChain agent, which infers the
+pose count and calls the existing generator as a tool, streaming poses into the
+UI. You can specify a duration in minutes instead of a pose count: each pose
+takes 40 seconds, so 10 minutes means 15 poses. Fractional counts round to the
+nearest integer (halves round up), with a minimum of one pose. An explicit pose
+count takes precedence over duration. If neither is specified, the agent uses
+9 poses. **Regenerate** resends the original prompt. Set `SEQUENCE_AGENT_MODEL`
+to change the model (default:
+`openai:gpt-5.5`). The agent requires `OPENAI_API_KEY` in addition to the existing
+catalog and TypeSafe settings.
+
+```bash
+uv run --env-file .env streamlit run src/langchain_app/generate_sequence.py
+```
+
 Sequence Generator's **Save** opens Asana Catalog in a new tab and transfers the
 selected sequence to its authenticated import page. Set `ASANA_SERVICE_BASE_URL`
 to the address where you sign in to the catalog (for example `http://localhost:4999`).
