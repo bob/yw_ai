@@ -22,7 +22,6 @@ class TypeSafeService:
 
     _QUESTION_ID = "next_yoga_pose"
     _RULES = (
-        "Always start with a starting pose. Randomly choose from standing, lying, or seated.",
         "Each element must be a valid yoga pose.",
         "Do not repeat any pose already selected for the sequence.",
         "Prefer alternating between flexion and extension poses.",

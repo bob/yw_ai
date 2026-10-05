@@ -1,0 +1,84 @@
+{
+  "info": {
+    "id": 0,
+    "uuid": "80625619-08bd-4991-a786-b362768eb6c4",
+    "name": "New Sequence",
+    "description": null,
+    "language": "en",
+    "elements_count": 9
+  },
+  "thumbnails": [
+    {
+      "uuid": "39D3F4B4-E585-4D72-AC44-889965EC9670",
+      "order": 1,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MTA3MzUsInB1ciI6ImJsb2JfaWQifX0=--8022a894b36e834a8c4468c3f2482b3396f6feb0/catalog-item.jpg",
+      "alt": "Tadasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "2DB31922-EA31-4718-8912-F150B14DD641",
+      "order": 2,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxNCwicHVyIjoiYmxvYl9pZCJ9fQ==--013fa155a93e0c1c770ba22962d26d5097e6e0e2/catalog-item.jpg",
+      "alt": "Prasarita Padottanasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "0D389F4F-57B6-41C5-86D6-A54AA73FF9EB",
+      "order": 3,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Njc0NiwicHVyIjoiYmxvYl9pZCJ9fQ==--d35c998df42497176b9695bd7536698919f7074e/catalog-item-841.jpg",
+      "alt": "Setu Bandhasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "E1E22F34-E27B-4CC7-8C19-BF072722E340",
+      "order": 4,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NjI2MCwicHVyIjoiYmxvYl9pZCJ9fQ==--1f105876e6c3d2cd3aced666a6d12173a91bf217/catalog-item.jpg",
+      "alt": "Jathara Parivartanasana",
+      "start_mirror": true,
+      "end_mirror": true
+    },
+    {
+      "uuid": "F09AA078-9F8C-405B-B63E-5D9AD88183E7",
+      "order": 5,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIwNCwicHVyIjoiYmxvYl9pZCJ9fQ==--26200cbe9c5f4e44bbfe4e06cde68ce6c25c3d95/catalog-item.jpg",
+      "alt": "Ustrasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "EB71BF80-0AE0-4414-B11F-67158061A018",
+      "order": 6,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIwMywicHVyIjoiYmxvYl9pZCJ9fQ==--ccefd7ccc363bcfae2892735b293d07bc84b3e1e/catalog-item-778.jpg",
+      "alt": "Halasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "1B355FDE-C749-435E-A0A4-C97EB2D51A36",
+      "order": 7,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIwOSwicHVyIjoiYmxvYl9pZCJ9fQ==--8af14ec6ea60121ccd2e5a9a412ad13038336075/catalog-item.jpg",
+      "alt": "Bhujangasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "3A7981D0-3EE0-4431-A868-0C482EFC782B",
+      "order": 8,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxMCwicHVyIjoiYmxvYl9pZCJ9fQ==--5169292b97c7efd7b0fcf5c9f561bd4592461fe4/catalog-item.jpg",
+      "alt": "Baddha Konasana",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "65374D71-6CFC-410D-9642-ADF23AB25474",
+      "order": 9,
+      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxMywicHVyIjoiYmxvYl9pZCJ9fQ==--40d252f838d06a6103eb117a8017ab3f6d8b039f/catalog-item.jpg",
+      "alt": "Paschimottanasana",
+      "start_mirror": false,
+      "end_mirror": false
+    }
+  ]
+}

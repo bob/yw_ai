@@ -24,22 +24,24 @@ class SequenceVariantTests(unittest.TestCase):
         generator.generate.side_effect = [[pose(1)], [pose(2)], [pose(3)]]
         with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator):
             app = AppTest.from_file(str(APP)).run()
-            app.chat_input[0].set_value("gentle practice").run()
+            self.assertEqual(len(app.chat_input), 0)
+            app.button(key="generate-sequence").click().run()
+            self.assertEqual(len(app.chat_input), 1)
             self.assertFalse(app.exception)
-            app.button(key="assistant-sequence-1-regenerate").click().run()
+            app.button(key="assistant-sequence-0-regenerate").click().run()
             self.assertFalse(app.exception)
-            message = app.session_state.messages[1]
+            message = app.session_state.messages[0]
             self.assertEqual(len(message["sequence_variants"]), 2)
             self.assertEqual(message["selected_sequence_index"], 1)
-            app.button(key="assistant-sequence-1-previous").click().run()
-            self.assertEqual(app.session_state.messages[1]["sequence"]["thumbnails"][0]["alt"], "Pose 1")
-            app.button(key="assistant-sequence-1-regenerate").click().run()
-            self.assertEqual(len(app.session_state.messages[1]["sequence_variants"]), 3)
-            app.button(key="assistant-sequence-1-previous").click().run()
-            app.button(key="assistant-sequence-1-next").click().run()
+            app.button(key="assistant-sequence-0-previous").click().run()
+            self.assertEqual(app.session_state.messages[0]["sequence"]["thumbnails"][0]["alt"], "Pose 1")
+            app.button(key="assistant-sequence-0-regenerate").click().run()
+            self.assertEqual(len(app.session_state.messages[0]["sequence_variants"]), 3)
+            app.button(key="assistant-sequence-0-previous").click().run()
+            app.button(key="assistant-sequence-0-next").click().run()
             self.assertFalse(app.exception)
             self.assertEqual(generator.generate.call_args_list, [
-                call("gentle practice", language="en", count=9)
+                call("Generate a yoga sequence.", language="en", count=9)
             ] * 3)
 
     def test_generation_error_keeps_existing_variant(self):
@@ -47,11 +49,11 @@ class SequenceVariantTests(unittest.TestCase):
         generator.generate.side_effect = [[pose(1)], ValueError("generation failed")]
         with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator):
             app = AppTest.from_file(str(APP)).run()
-            app.chat_input[0].set_value("practice").run()
-            app.button(key="assistant-sequence-1-regenerate").click().run()
+            app.button(key="generate-sequence").click().run()
+            app.button(key="assistant-sequence-0-regenerate").click().run()
             self.assertFalse(app.exception)
             self.assertTrue(app.error)
-            message = app.session_state.messages[1]
+            message = app.session_state.messages[0]
             self.assertEqual(len(message["sequence_variants"]), 1)
             self.assertEqual(message["selected_sequence_index"], 0)
             self.assertEqual(message["sequence"]["thumbnails"][0]["alt"], "Pose 1")

@@ -1,5 +1,12 @@
 # LangChain app
 
+Sequence Generator's **Save** opens Asana Catalog in a new tab and transfers the
+selected sequence to its authenticated import page. Set `ASANA_SERVICE_BASE_URL`
+to the address where you sign in to the catalog (for example `http://localhost:4999`).
+On the catalog server, allow the generator's origin with
+`SEQUENCE_GENERATOR_ORIGINS=http://localhost:8502`; see
+[the import protocol](docs/import_generated.md). Save no longer writes JSON to `docs`.
+
 This sample agent answers a weather question with a LangChain tool. LangSmith
 automatically traces the agent, model, and tool calls when tracing is enabled.
 

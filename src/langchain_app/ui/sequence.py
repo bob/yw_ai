@@ -4,8 +4,11 @@ import time
 from collections.abc import Callable, Iterable, Iterator
 from html import escape
 from typing import TypedDict
+from uuid import uuid4
 
 import streamlit as st
+
+from langchain_app.ui.sequence_import import render_sequence_import
 
 from langchain_app.schemas import CatalogItemSchema, ChatMessage, Language
 from langchain_app.services import (
@@ -19,6 +22,8 @@ THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 
 
 class AsanaThumbnail(TypedDict):
+    uuid: str | None
+    order: int
     image_url: str
     alt: str
     start_mirror: bool
@@ -27,6 +32,7 @@ class AsanaThumbnail(TypedDict):
 
 class SequenceInfo(TypedDict):
     id: int
+    uuid: str | None
     name: str
     description: str | None
     language: Language
@@ -42,6 +48,7 @@ def create_sequence_view(language: Language) -> SequenceView:
     return {
         "info": {
             "id": 0,
+            "uuid": str(uuid4()),
             "name": "New Sequence",
             "description": None,
             "language": language,
@@ -61,6 +68,7 @@ def get_sequence_view(
     return {
         "info": {
             "id": sequence.id,
+            "uuid": None,
             "name": sequence.name,
             "description": sequence.description,
             "language": sequence.lang,
@@ -68,6 +76,8 @@ def get_sequence_view(
         },
         "thumbnails": [
             {
+                "uuid": element.catalog_item.uuid,
+                "order": element.order,
                 "image_url": str(element.catalog_item.image_url),
                 "alt": element.catalog_item.name,
                 "start_mirror": element.start_mirror,
@@ -85,11 +95,15 @@ def generate_thumbnails_one_by_one(
 ) -> Iterator[AsanaThumbnail]:
     """Convert catalog items to thumbnails one by one."""
 
+    order = 0
     for catalog_item in catalog_items:
         if catalog_item.image_url is None:
             continue
 
+        order += 1
         yield {
+            "uuid": catalog_item.uuid,
+            "order": order,
             "image_url": str(catalog_item.image_url),
             "alt": catalog_item.name,
             "start_mirror": catalog_item.bilateral,
@@ -119,11 +133,13 @@ class SequenceRenderer:
         generator_factory: Callable[[], SequenceGenerator] | None = None,
         language: Language = "en",
         elements_count: int = 9,
+        catalog_url: str | None = None,
     ) -> None:
         self._thumbnail_size = thumbnail_size
         self._generator_factory = generator_factory
-        self._language = language
+        self._language: Language = language
         self._elements_count = elements_count
+        self._catalog_url = catalog_url
 
     def render_generated_sequence(
         self, request: str, *, key: str
@@ -198,21 +214,26 @@ class SequenceRenderer:
                 message["sequence_request"] = request
 
         key = f"assistant-sequence-{message_index}"
-        with st.container(horizontal=True, vertical_alignment="center"):
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="left",
+            vertical_alignment="center",
+        ):
             regenerate = st.button(
                 "Regenerate", key=f"{key}-regenerate", disabled=request is None
             )
-            if st.button(
-                "Previous sequence", icon=":material/chevron_left:",
-                key=f"{key}-previous", disabled=selected == 0,
-            ):
-                selected -= 1
-            st.caption(f"{selected + 1} / {len(variants)}")
-            if st.button(
-                "Next sequence", icon=":material/chevron_right:",
-                key=f"{key}-next", disabled=selected == len(variants) - 1,
-            ):
-                selected += 1
+            if len(variants) > 1:
+                if st.button(
+                    "Previous Sequence", icon=":material/chevron_left:",
+                    key=f"{key}-previous", disabled=selected == 0,
+                ):
+                    selected -= 1
+                st.caption(f"{selected + 1}/{len(variants)}", width="content")
+                if st.button(
+                    "Next Sequence", icon=":material/chevron_right:",
+                    key=f"{key}-next", disabled=selected == len(variants) - 1,
+                ):
+                    selected += 1
 
         if selected != message.get("selected_sequence_index", 0):
             message["selected_sequence_index"] = selected
@@ -220,6 +241,13 @@ class SequenceRenderer:
             st.rerun()
         message["sequence"] = variants[selected]
         self.render(variants[selected], key=key)
+        if self._catalog_url is not None:
+            if variants[selected]["info"]["id"] == 0 and not variants[selected]["info"].get("uuid"):
+                variants[selected]["info"]["uuid"] = str(uuid4())
+            render_sequence_import(
+                variants[selected], catalog_url=self._catalog_url,
+                key=f"{key}-save-{selected}",
+            )
 
         if regenerate and request is not None:
             with st.container():
