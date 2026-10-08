@@ -3,21 +3,26 @@
 import time
 from collections.abc import Callable, Iterable, Iterator
 from html import escape
+from itertools import chain
 from typing import TypedDict
 from uuid import uuid4
 
 import streamlit as st
 
-from langchain_app.ui.sequence_import import render_sequence_import
-
-from langchain_app.schemas import CatalogItemSchema, ChatMessage, Language
+from langchain_app.schemas import (
+    CatalogItemSchema,
+    ChatMessage,
+    GeneratedSequence,
+    Language,
+)
 from langchain_app.services import (
+    AssistantAgent,
+    AssistantAgentError,
     CatalogItemServiceError,
-    SequenceAgent,
-    SequenceAgentError,
     SequenceService,
     TypeSafeServiceError,
 )
+from langchain_app.ui.sequence_import import render_sequence_import
 
 THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
 
@@ -56,6 +61,26 @@ def create_sequence_view(language: Language) -> SequenceView:
             "elements_count": 0,
         },
         "thumbnails": [],
+    }
+
+
+def generated_sequence_view(sequence: GeneratedSequence) -> SequenceView:
+    """Project a complete agent snapshot into the display and import format."""
+    return {
+        "info": {
+            "id": 0, "uuid": str(sequence.uuid), "name": sequence.name,
+            "description": sequence.description, "language": sequence.language,
+            "elements_count": sequence.elements_count,
+        },
+        "thumbnails": [
+            {
+                "uuid": element.catalog_item.uuid, "order": element.order,
+                "image_url": str(element.catalog_item.image_url) if element.catalog_item.image_url else "",
+                "alt": element.catalog_item.name,
+                "start_mirror": element.start_mirror, "end_mirror": element.end_mirror,
+            }
+            for element in sequence.elements
+        ],
     }
 
 
@@ -131,7 +156,7 @@ class SequenceRenderer:
         self,
         *,
         thumbnail_size: int = 64,
-        generator_factory: Callable[[], SequenceAgent] | None = None,
+        generator_factory: Callable[[], AssistantAgent] | None = None,
         language: Language = "en",
         catalog_url: str | None = None,
     ) -> None:
@@ -141,37 +166,42 @@ class SequenceRenderer:
         self._catalog_url = catalog_url
 
     def render_generated_sequence(
-        self, request: str, *, key: str
+        self, request: str, *, key: str, sequence_uuid: str | None = None,
     ) -> SequenceView | None:
         """Generate from the original request and retain only a complete result."""
         if self._generator_factory is None:
             raise ValueError("A generator factory is required to generate sequences")
-        generator_factory = self._generator_factory
-        sequence = create_sequence_view(self._language)
-        thumbnails: list[AsanaThumbnail] = []
+        assistant = self._generator_factory()
+        return self._render_catalog_items(
+            assistant.generate(request, language=self._language, sequence_uuid=sequence_uuid),
+            key=key, assistant=assistant,
+        )
 
-        def remember_thumbnails() -> Iterator[AsanaThumbnail]:
-            generator = generator_factory()
-            for thumbnail in generate_thumbnails_one_by_one(
-                generator.generate(request, language=self._language)
-            ):
-                thumbnails.append(thumbnail)
-                yield thumbnail
-
+    def _render_catalog_items(
+        self, catalog_items: Iterator[CatalogItemSchema], *, key: str, assistant: AssistantAgent,
+    ) -> SequenceView | None:
+        """Display items as they arrive, retaining only a complete result."""
+        previous_uuid = assistant.active_sequence_uuid
         try:
-            self.render(
-                SequenceView(info=sequence["info"], thumbnails=remember_thumbnails()),
-                key=key,
-            )
+            first = next(catalog_items, None)
+            if first is not None:
+                self.render(
+                    SequenceView(
+                        info=create_sequence_view(self._language)["info"],
+                        thumbnails=generate_thumbnails_one_by_one(chain([first], catalog_items)),
+                    ),
+                    key=key,
+                )
         except (
-            CatalogItemServiceError, TypeSafeServiceError, SequenceAgentError, ValueError
+            CatalogItemServiceError, TypeSafeServiceError, AssistantAgentError, ValueError
         ) as exc:
-            st.error(f"Could not create sequence: {exc}")
+            st.error(f"Could not update sequence: {exc}")
+        # A committed tool result survives failure of the subsequent text reply.
+        active_uuid = assistant.active_sequence_uuid
+        if active_uuid is None or active_uuid == previous_uuid:
             return None
-
-        sequence["thumbnails"] = thumbnails
-        sequence["info"]["elements_count"] = len(thumbnails)
-        return sequence
+        snapshot = assistant.get_sequence(active_uuid)
+        return generated_sequence_view(snapshot) if snapshot is not None else None
 
     def render_messages(self, messages: list[ChatMessage]) -> None:
         """Display chat history with controls for each generated sequence."""
@@ -184,6 +214,21 @@ class SequenceRenderer:
         self, messages: list[ChatMessage], message_index: int
     ) -> None:
         message = messages[message_index]
+        assistant = None
+        variant_uuids = message.get("sequence_variant_uuids")
+        if variant_uuids and self._generator_factory is not None:
+            assistant = self._generator_factory()
+            # UI views are disposable projections; full catalog data lives in the agent.
+            snapshots = [
+                snapshot for uuid in variant_uuids
+                if (snapshot := assistant.get_sequence(uuid)) is not None
+            ]
+            if len(snapshots) == len(variant_uuids):
+                message["sequence_variants"] = [generated_sequence_view(snapshot) for snapshot in snapshots]
+                message["sequence"] = message["sequence_variants"][message.get("selected_sequence_index", 0)]
+            else:
+                # Legacy cards remain viewable without inventing catalog data.
+                assistant = None
         stored_sequence = message.get("sequence")
         if stored_sequence is None and (
             stored_sequence_info := message.get("sequence_info")
@@ -212,6 +257,7 @@ class SequenceRenderer:
                 message["sequence_request"] = request
 
         key = f"assistant-sequence-{message_index}"
+        selected_uuid = variants[selected]["info"].get("uuid")
         with st.container(
             horizontal=True,
             horizontal_alignment="left",
@@ -220,6 +266,12 @@ class SequenceRenderer:
             regenerate = st.button(
                 "Regenerate", key=f"{key}-regenerate", disabled=request is None
             )
+            if assistant is not None and selected_uuid is not None:
+                if selected_uuid == assistant.active_sequence_uuid:
+                    st.caption("Active sequence", width="content")
+                elif st.button("Use this sequence", key=f"{key}-use"):
+                    assistant.select_sequence(selected_uuid)
+                    st.rerun()
             if len(variants) > 1:
                 if st.button(
                     "Previous Sequence", icon=":material/chevron_left:",
@@ -236,6 +288,10 @@ class SequenceRenderer:
         if selected != message.get("selected_sequence_index", 0):
             message["selected_sequence_index"] = selected
             message["sequence"] = variants[selected]
+            selected_uuid = variants[selected]["info"]["uuid"]
+            message["sequence_uuid"] = selected_uuid
+            if assistant is not None and selected_uuid is not None:
+                assistant.select_sequence(selected_uuid)
             st.rerun()
         message["sequence"] = variants[selected]
         self.render(variants[selected], key=key)
@@ -250,26 +306,56 @@ class SequenceRenderer:
         if regenerate and request is not None:
             with st.container():
                 new_sequence = self.render_generated_sequence(
-                    request, key=f"{key}-live"
+                    request, key=f"{key}-live",
+                    sequence_uuid=selected_uuid if assistant is not None else None,
                 )
             if new_sequence is not None:
                 variants.append(new_sequence)
                 message["selected_sequence_index"] = len(variants) - 1
                 message["sequence"] = new_sequence
+                new_uuid = new_sequence["info"]["uuid"]
+                message["sequence_uuid"] = new_uuid
+                if variant_uuids is not None and new_uuid is not None:
+                    variant_uuids.append(new_uuid)
                 st.rerun()
 
-    def render_response(self, request: str, *, content: str, key: str) -> ChatMessage:
-        """Stream a new assistant sequence and return its session message."""
+    def render_response(
+        self, request: str, *, content: str, key: str, require_generation: bool = False,
+    ) -> ChatMessage:
+        """Display assistant text and any generated sequence in a chat message."""
+        if self._generator_factory is None:
+            raise ValueError("An assistant factory is required")
+
+        assistant = self._generator_factory()
+        texts = [content] if content else []
         with st.chat_message("assistant"):
-            st.markdown(content)
-            sequence = self.render_generated_sequence(request, key=key)
+            text_output = st.empty()
+            if content:
+                text_output.markdown(content)
+
+            def catalog_items() -> Iterator[CatalogItemSchema]:
+                for chunk in assistant.stream(request, require_generation=require_generation):
+                    if isinstance(chunk, CatalogItemSchema):
+                        yield chunk
+                    else:
+                        texts.append(chunk)
+                        text_output.markdown("".join(texts))
+
+            sequence = self._render_catalog_items(catalog_items(), key=key, assistant=assistant)
+
+        sequence_uuid = sequence["info"]["uuid"] if sequence is not None else None
+        snapshots = assistant.get_sequence_variants(sequence_uuid) if sequence_uuid else []
+        variants = [generated_sequence_view(snapshot) for snapshot in snapshots]
+        selected = next((index for index, snapshot in enumerate(snapshots) if str(snapshot.uuid) == sequence_uuid), 0)
         return {
             "role": "assistant",
-            "content": content,
+            "content": "".join(texts),
             "sequence": sequence,
-            "sequence_request": request,
-            "sequence_variants": [sequence] if sequence is not None else [],
-            "selected_sequence_index": 0,
+            "sequence_uuid": sequence_uuid,
+            "sequence_variant_uuids": [str(snapshot.uuid) for snapshot in snapshots],
+            "sequence_request": snapshots[selected].generation_request if snapshots else request,
+            "sequence_variants": variants,
+            "selected_sequence_index": selected,
         }
 
     def render_styles(self) -> None:
@@ -380,4 +466,7 @@ class SequenceRenderer:
     ) -> None:
         with st.container(key=key, horizontal=True, wrap=True, gap="xxsmall"):
             for thumbnail in thumbnails:
-                st.html(self._thumbnail_html(thumbnail), width="content")
+                if thumbnail["image_url"]:
+                    st.html(self._thumbnail_html(thumbnail), width="content")
+                else:
+                    st.caption(thumbnail["alt"], width="content")

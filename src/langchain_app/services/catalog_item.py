@@ -1,113 +1,61 @@
-"""Client for the public catalog-items API."""
+"""Client for the public English-language catalog-items API."""
 
-from types import TracebackType
-from typing import Self
-from urllib.parse import quote
-
-import httpx
 from pydantic import TypeAdapter, ValidationError
 
-from langchain_app.schemas import CatalogItemSchema, Language
+from langchain_app.schemas.catalog import (
+    CatalogItemSearchResult,
+    CatalogItemsSearchArguments,
+)
+from langchain_app.services.catalog_client import CatalogClient
+from langchain_app.services.catalog_errors import (
+    CatalogServiceError,
+)
+
+# Preserve the exception imports used by existing generation consumers.
+CatalogItemServiceError = CatalogServiceError
 
 
-class CatalogItemServiceError(Exception):
-    """Base exception raised by :class:`CatalogItemService`."""
+class CatalogItemApiError(CatalogServiceError):
+    """Catalog items could not be loaded or validated."""
 
 
-class CatalogFolderNotFoundError(CatalogItemServiceError):
-    """Raised when the configured public catalog folder does not exist."""
+class CatalogItemService(CatalogClient):
+    """Search items in a public folder; every request uses language=en."""
 
+    api_error_type = CatalogItemApiError
+    _ITEMS = TypeAdapter(list[CatalogItemSearchResult])
 
-class CatalogItemApiError(CatalogItemServiceError):
-    """Raised when catalog items cannot be loaded from the public API."""
-
-
-class CatalogItemService:
-    """Fetch catalog items from a public catalog folder."""
-
-    _LANGUAGES = {"en", "uk", "ru"}  # noqa: RUF012
-    _ITEMS = TypeAdapter(list[CatalogItemSchema])
-
-    def __init__(
+    def search(
         self,
-        base_url: str,
-        catalog_folder_uuid: str,
         *,
-        client: httpx.Client | None = None,
-        timeout: float = 10.0,
-    ) -> None:
-        if not base_url.strip():
-            raise ValueError("base_url must not be empty")
-        if not catalog_folder_uuid.strip():
-            raise ValueError("catalog_folder_uuid must not be empty")
-
-        self._base_url = base_url.rstrip("/")
-        self._catalog_folder_uuid = catalog_folder_uuid.strip()
-        self._owns_client = client is None
-        self._client = client or httpx.Client(timeout=timeout)
-
-    def search(self, *, language: Language) -> list[CatalogItemSchema]:
-        """Return localized items from the configured public catalog folder."""
-
-        self._validate_language(language)
-        folder_uuid = quote(self._catalog_folder_uuid, safe="")
-        url = (
-            f"{self._base_url}/api/public/catalog_folders/{folder_uuid}/"
-            "catalog_items/search"
+        name: str | None = None,
+        uuid: str | None = None,
+        bilateral: bool | None = None,
+        catalog_tag_names: list[str] | None = None,
+        with_rigman: bool = False,
+        with_tags: bool = True,
+        limit: int = 10,
+        rand: bool = False,
+    ) -> list[CatalogItemSearchResult]:
+        """Return filtered API data without translating catalog names or tags."""
+        arguments = CatalogItemsSearchArguments(
+            name=name, uuid=uuid, bilateral=bilateral,
+            catalog_tag_names=catalog_tag_names if catalog_tag_names is not None else [],
+            with_rigman=with_rigman, with_tags=with_tags, limit=limit, rand=rand,
         )
-
+        params = [
+            (key, str(value).lower() if isinstance(value, bool) else str(value))
+            for key, value in arguments.model_dump(exclude={"catalog_tag_names"}).items()
+            if value is not None
+        ]
+        params.extend(("catalog_tag_names[]", tag) for tag in arguments.catalog_tag_names)
+        response = self._get("catalog_items/search", params)
         try:
-            response = self._client.get(
-                url,
-                params={
-                    "language": "en",
-                    "with_tags": True,
-                    "limit": 0,
-                    "rand": True,
-                }
-            )
-        except httpx.HTTPError as exc:
-            raise CatalogItemApiError("Could not reach the catalog items API") from exc
-
-        if response.status_code == httpx.codes.NOT_FOUND:
-            raise CatalogFolderNotFoundError(
-                f'Public catalog folder "{self._catalog_folder_uuid}" was not found'
-            )
-
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise CatalogItemApiError(
-                f"Catalog items API returned HTTP {response.status_code}"
-            ) from exc
-
-        try:
-            catalog_items = self._ITEMS.validate_python(response.json())
+            items = self._ITEMS.validate_python(response.json())
+            if with_tags and any(item.catalog_tag_names is None for item in items):
+                raise ValueError("catalog_tag_names is required when with_tags=true")
         except (ValidationError, ValueError) as exc:
             raise CatalogItemApiError(
-                "Catalog items API returned an invalid response"
+                "Catalog items API returned an invalid response", code="invalid_api_response"
             ) from exc
-
-        return catalog_items
-
-    def close(self) -> None:
-        """Close the internally-created HTTP client."""
-
-        if self._owns_client:
-            self._client.close()
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    @classmethod
-    def _validate_language(cls, language: str) -> None:
-        if language not in cls._LANGUAGES:
-            raise ValueError("language must be one of: en, uk, ru")
+        return items

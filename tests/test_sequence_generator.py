@@ -79,7 +79,9 @@ class SequenceGeneratorTests(unittest.TestCase):
         ) as draw:
             result = list(self.generator.generate("practice", language="en", count=4))
 
-        self.catalog.search.assert_called_once_with(language="en")
+        self.catalog.search.assert_called_once_with(
+            with_tags=True, with_rigman=False, limit=0, rand=True
+        )
         self.assertEqual(draw.call_count, 2)
         self.assertEqual(draw.call_args_list[0].args, (remaining, 10))
         self.assertEqual(draw.call_args_list[1].args, (remaining[1:], 10))
@@ -98,7 +100,9 @@ class SequenceGeneratorTests(unittest.TestCase):
             result = list(self.generator.generate("practice", language="en", count=3))
         self.assertEqual(result, [starting, *remaining])
         draw.assert_called_once_with(remaining, 2)
-        self.catalog.search.assert_called_once_with(language="en")
+        self.catalog.search.assert_called_once_with(
+            with_tags=True, with_rigman=False, limit=0, rand=True
+        )
 
     def test_last_pose_uses_all_eligible_finishing_items(self):
         starting = item(1, ["Other/Starting", "Other/Finishing"])
@@ -115,7 +119,9 @@ class SequenceGeneratorTests(unittest.TestCase):
             self.assertEqual(list(sequence), [starting, finishing[-1]])
         draw.assert_not_called()
         self.assertEqual(self.jev.choose_next_catalog_item.call_args.args, (finishing,))
-        self.catalog.search.assert_called_once_with(language="en")
+        self.catalog.search.assert_called_once_with(
+            with_tags=True, with_rigman=False, limit=0, rand=True
+        )
 
     def test_missing_unused_finishing_pose_falls_back_to_available_items(self):
         for catalog in (

@@ -38,8 +38,12 @@ class SequenceGenerator:
             return
 
         catalog_items = [
-            item
-            for item in self._catalog_item_service.search(language=language)
+            CatalogItemSchema.model_validate(
+                item.model_dump(exclude={"rigman_data", "second_side_rigman_data"})
+            )
+            for item in self._catalog_item_service.search(
+                with_tags=True, with_rigman=False, limit=0, rand=True
+            )
             if item.image_url is not None
         ]
         starting_items = [

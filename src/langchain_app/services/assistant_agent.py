@@ -1,0 +1,233 @@
+"""Route requests through one assistant with sequence and catalog tools."""
+
+from collections.abc import Callable, Iterator
+from copy import deepcopy
+from typing import cast
+from uuid import uuid4
+
+from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import InputAgentState, OutputAgentState
+from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import GraphRecursionError
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.stream import CustomTransformer, UpdatesTransformer
+from openai import OpenAIError
+
+from langchain_app.schemas import CatalogItemSchema, GeneratedSequence, Language
+from langchain_app.schemas.assistant import AssistantInputState, AssistantState
+from langchain_app.services.catalog_item import CatalogItemService
+from langchain_app.services.catalog_tag import CatalogTagService
+from langchain_app.services.sequence_context import (
+    invalidate_catalog_candidates,
+    selected_sequence_context,
+    sequential_tool_calls,
+)
+from langchain_app.services.sequence_generator import SequenceGenerator
+from langchain_app.tools.context import AssistantToolContext
+
+type _AssistantGraph = CompiledStateGraph[
+    AgentState, AssistantToolContext, InputAgentState, OutputAgentState,
+]
+
+SYSTEM_PROMPT = (
+    "You are a yoga assistant with sequence generation, catalog search, catalog tags, "
+    "and sequence replacement tools. Choose tools according to the user's intent. "
+    "For a new sequence, call generate_sequence once with the user's full request, "
+    "preserving all preferences and constraints. Infer the pose count: an explicit "
+    "count takes precedence over duration. For duration alone, use minutes * 60 / 40, "
+    "round halves up, with a minimum of 1 pose (10 minutes means 15 poses). "
+    "If neither count nor duration is specified, use 9 poses. "
+    "Use search_catalog_items for real catalog items; never invent catalog data. "
+    "Get real tag names with get_catalog_tag_names before using unknown tag filters. "
+    "Catalog requests always use language=en. Translate non-English search terms "
+    "into English, but keep item names and tag names exactly as returned by the API. "
+    "Always reply in the user's language, including after a tool call. "
+    "Use replace_sequence_element only for an explicitly requested replacement, "
+    "with IDs from the selected sequence and real search results. Ask for clarification "
+    "if the target or replacement is ambiguous. A search for alternatives does not "
+    "authorize replacement. Use one tool at a time and apply at most one sequence "
+    "change per request. In this first release, editing supports replacing one "
+    "element per request. If the user asks for multiple replacements, ask which "
+    "single element to replace before changing the sequence. Adding, deleting, "
+    "moving elements, and changing mirroring are unavailable in this release. "
+    "Explain this limitation when asked for these operations; do not simulate "
+    "them with generation or replacement tools, or claim they were applied. "
+    "A replacement creates a new variant in the same family "
+    "and keeps the original in history. Report the old and new item after success. "
+    "For no_change, explain that the selected item is already present. "
+    "If no editable sequence context is available, explain "
+    "that replacement is unavailable; never claim that a sequence has been changed. "
+    "Text replies and clarifying questions do not require tool calls. "
+    "Do not invent poses or answer a generation request with a sequence in text."
+)
+
+
+class AssistantAgentError(Exception):
+    """The assistant could not complete a language-model request."""
+
+
+class AssistantAgent:
+    """Expose generation and catalog tools through a single LangChain agent."""
+
+    def __init__(
+        self,
+        generator_factory: Callable[[], SequenceGenerator],
+        *,
+        catalog_item_service: CatalogItemService,
+        catalog_tag_service: CatalogTagService,
+        model: str | BaseChatModel = "openai:gpt-5.5",
+    ) -> None:
+        self._generator_factory = generator_factory
+        self._catalog_item_service = catalog_item_service
+        self._catalog_tag_service = catalog_tag_service
+        self._model = model
+        self._agent: _AssistantGraph | None = None
+        self._checkpointer = InMemorySaver()
+        self._config: RunnableConfig = {
+            "configurable": {"thread_id": str(uuid4())}, "recursion_limit": 20,
+        }
+
+    @property
+    def state(self) -> AssistantState:
+        """Return a detached view of this session's graph state."""
+        values = self._agent.get_state(self._config).values if self._agent else {}
+        return cast(AssistantState, deepcopy(values))
+
+    @property
+    def active_sequence_uuid(self) -> str | None:
+        return self.state.get("active_sequence_uuid")
+
+    def get_sequence(self, sequence_uuid: str) -> GeneratedSequence | None:
+        snapshot = self.state.get("sequences", {}).get(sequence_uuid)
+        return GeneratedSequence.from_snapshot(snapshot) if snapshot else None
+
+    def get_sequence_variants(self, sequence_uuid: str) -> list[GeneratedSequence]:
+        """Return this variant's family in creation order for UI history."""
+        snapshots = self.state.get("sequences", {})
+        source = snapshots.get(sequence_uuid)
+        if source is None:
+            return []
+        return [
+            GeneratedSequence.from_snapshot(snapshot)
+            for snapshot in snapshots.values() if snapshot["family_uuid"] == source["family_uuid"]
+        ]
+
+    def select_sequence(self, sequence_uuid: str) -> None:
+        """Select a stored variant without running the model or any tools."""
+        if self.get_sequence(sequence_uuid) is None:
+            raise ValueError("The sequence variant is not stored in this assistant session")
+        self._get_agent().update_state(self._config, {"active_sequence_uuid": sequence_uuid})
+
+    def _get_agent(self) -> _AssistantGraph:
+        if self._agent is None:
+            from langchain_app.tools import ASSISTANT_TOOLS
+
+            model = (
+                init_chat_model(
+                    self._model, timeout=300,
+                    model_kwargs={"parallel_tool_calls": False},
+                ) if isinstance(self._model, str) else self._model
+            )
+            self._agent = create_agent(
+                model=model, tools=list(ASSISTANT_TOOLS), system_prompt=SYSTEM_PROMPT,
+                context_schema=AssistantToolContext, state_schema=AssistantState,
+                middleware=[selected_sequence_context, invalidate_catalog_candidates, sequential_tool_calls],
+                checkpointer=self._checkpointer,
+            )
+        return self._agent
+
+    def _complete_failed_tool_calls(self) -> None:
+        """Keep history valid when a tool raises after streaming partial progress."""
+        if self._agent is None:
+            return
+        messages = self.state.get("messages", [])
+        answered = set()
+        missing = []
+        for message in reversed(messages):
+            if isinstance(message, ToolMessage):
+                answered.add(message.tool_call_id)
+            elif isinstance(message, AIMessage):
+                missing = [
+                    ToolMessage(
+                        content='{"status": "error", "code": "tool_execution_failed"}',
+                        tool_call_id=call["id"], status="error",
+                    )
+                    for call in message.tool_calls if call["id"] not in answered
+                ]
+                break
+        if missing:
+            self._agent.update_state(self._config, {"messages": missing}, as_node="tools")
+
+    def stream(
+        self, request: str, *, require_generation: bool = False,
+        regenerate_sequence_uuid: str | None = None,
+    ) -> Iterator[CatalogItemSchema | str]:
+        """Yield generated items and assistant text, excluding tool messages.
+
+        Full snapshots and message history persist for the life of this instance.
+        Dependencies and operation flags in tool context remain request-scoped.
+        """
+        parent = None
+        active_before = self.active_sequence_uuid
+        if regenerate_sequence_uuid is not None:
+            parent = self.get_sequence(regenerate_sequence_uuid)
+            if parent is None:
+                raise ValueError("The Regenerate source is not stored in this assistant session")
+            request = parent.generation_request
+
+        context = AssistantToolContext(
+            generator_factory=self._generator_factory,
+            catalog_item_service=self._catalog_item_service,
+            catalog_tag_service=self._catalog_tag_service,
+            user_request=request, require_generation=require_generation,
+            regeneration_parent=parent,
+        )
+        try:
+            agent = self._get_agent()
+            inputs: AssistantInputState = {
+                "messages": [{"role": "user", "content": request}],
+                "turn_operation_committed": False,
+            }
+            if parent is not None:
+                inputs["active_sequence_uuid"] = str(parent.uuid)
+            stream = agent.stream_events(
+                inputs,
+                context=context, config=self._config,
+                version="v3", transformers=[CustomTransformer, UpdatesTransformer],
+            )
+            for event_type, data in stream.interleave("custom", "updates"):
+                if event_type == "custom":
+                    yield data
+                elif event_type == "updates":
+                    for update in data.values():
+                        if update is None:
+                            continue
+                        for message in update.get("messages", []):
+                            if isinstance(message, AIMessage) and not message.tool_calls and message.text:
+                                yield message.text
+            if require_generation and not context.generation_completed:
+                raise AssistantAgentError("The language model did not call the generation tool successfully")
+        except Exception as exc:
+            self._complete_failed_tool_calls()
+            if parent is not None and not context.generation_completed and self._agent is not None:
+                self._agent.update_state(self._config, {"active_sequence_uuid": active_before})
+            if isinstance(exc, (OpenAIError, GraphRecursionError)):
+                raise AssistantAgentError(f"Language model request failed: {exc}") from exc
+            raise
+
+    def generate(
+        self, request: str, *, language: Language = "en", sequence_uuid: str | None = None,
+    ) -> Iterator[CatalogItemSchema]:
+        """Retain the generation interface for Generate/Regenerate controls.
+
+        The legacy language argument does not change the English catalog data.
+        """
+        for chunk in self.stream(
+            request, require_generation=True, regenerate_sequence_uuid=sequence_uuid,
+        ):
+            if isinstance(chunk, CatalogItemSchema):
+                yield chunk

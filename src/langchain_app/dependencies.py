@@ -5,8 +5,9 @@ import os
 import streamlit as st
 
 from langchain_app.services import (
+    AssistantAgent,
     CatalogItemService,
-    SequenceAgent,
+    CatalogTagService,
     SequenceGenerator,
     TypeSafeService,
 )
@@ -19,6 +20,15 @@ def get_catalog_item_service(
     return CatalogItemService(
         base_url=base_url,
         catalog_folder_uuid=catalog_folder_uuid,
+    )
+
+
+@st.cache_resource
+def get_catalog_tag_service(
+    base_url: str, catalog_folder_uuid: str
+) -> CatalogTagService:
+    return CatalogTagService(
+        base_url=base_url, catalog_folder_uuid=catalog_folder_uuid,
     )
 
 
@@ -40,12 +50,19 @@ def get_sequence_generator(
     )
 
 
-def get_sequence_agent(
+def get_assistant_agent(
     base_url: str, catalog_folder_uuid: str
-) -> SequenceAgent:
+) -> AssistantAgent:
     # Initialize Streamlit-cached clients on the script thread, before the tool runs.
     generator = get_sequence_generator(base_url, catalog_folder_uuid)
-    return SequenceAgent(
+
+    return AssistantAgent(
         generator_factory=lambda: generator,
-        model=os.getenv("SEQUENCE_AGENT_MODEL", "openai:gpt-5.5"),
+        catalog_item_service=get_catalog_item_service(base_url, catalog_folder_uuid),
+        catalog_tag_service=get_catalog_tag_service(base_url, catalog_folder_uuid),
+        model=(
+            os.getenv("ASSISTANT_AGENT_MODEL", "").strip()
+            or os.getenv("SEQUENCE_AGENT_MODEL", "").strip()
+            or "openai:gpt-5.5"
+        ),
     )

@@ -1,36 +1,73 @@
 """Exercise variant history and navigation without external generation calls."""
 
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, call, patch
+from uuid import uuid4
 
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from openai import APIConnectionError
+import httpx
 from pydantic import Field
 from streamlit.testing.v1 import AppTest
 
 from langchain_app.schemas import CatalogItemSchema
 from langchain_app.services.sequence_generator import SequenceGenerator
+from test_assistant_agent import tool_call
+from test_sequence_replacement import catalog_pose, replacement_call
 
-APP = Path(__file__).resolve().parents[1] / "src/langchain_app/generate_sequence.py"
+APP = Path(__file__).resolve().parents[1] / "src/langchain_app/assistant.py"
 
 
 class ToolCallingModel(FakeMessagesListChatModel):
     received_requests: list[str] = Field(default_factory=list)
+    received_messages: list[list] = Field(default_factory=list)
 
     def bind_tools(self, tools, **kwargs):
         return self
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        self.received_requests.append(messages[-1].content)
-        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        self.received_messages.append(list(messages))
+        if isinstance(messages[-1], HumanMessage):
+            self.received_requests.append(messages[-1].content)
+        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        for generation in result.generations:
+            generation.message = generation.message.model_copy(deep=True)
+            generation.message.id = str(uuid4())
+            for tool in generation.message.tool_calls:
+                tool["id"] = str(uuid4())
+        return result
+
+
+class ErrorAfterGenerationModel(ToolCallingModel):
+    fail_on_tool_result: bool = True
+
+    def _generate(self, messages, **kwargs):
+        if self.fail_on_tool_result and isinstance(messages[-1], ToolMessage):
+            self.fail_on_tool_result = False
+            raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
+        return super()._generate(messages, **kwargs)
+
+
+class ErrorAfterReplacementModel(ToolCallingModel):
+    def _generate(self, messages, **kwargs):
+        if isinstance(messages[-1], ToolMessage) and messages[-1].name == "replace_sequence_element":
+            raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
+        return super()._generate(messages, **kwargs)
+
+
+def selected_snapshot(model, call_index=-1):
+    context = model.received_messages[call_index][0].content_blocks[-1]["text"]
+    return json.loads(next(line for line in context.splitlines() if line.startswith('{"selected_sequence":')))["selected_sequence"]
 
 
 def tool_model(request="Generate a yoga sequence with 9 poses.", count=9):
     return ToolCallingModel(responses=[AIMessage(content="", tool_calls=[{
         "name": "generate_sequence", "args": {"request": request, "count": count},
         "id": "sequence-call", "type": "tool_call",
-    }])])
+    }]), AIMessage(content="")])
 
 
 def pose(number):
@@ -46,7 +83,7 @@ class SequenceVariantTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
         self.model = patch(
-            "langchain_app.services.sequence_agent.init_chat_model",
+            "langchain_app.services.assistant_agent.init_chat_model",
             side_effect=lambda *args, **kwargs: tool_model(),
         )
         self.model.start()
@@ -58,7 +95,7 @@ class SequenceVariantTests(unittest.TestCase):
         generator.generate.side_effect = [[pose(1)], [pose(2)]]
         language_model = tool_model(request, count=12)
         with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
-            "langchain_app.services.sequence_agent.init_chat_model",
+            "langchain_app.services.assistant_agent.init_chat_model",
             return_value=language_model,
         ) as model:
             app = AppTest.from_file(str(APP)).run()
@@ -89,7 +126,7 @@ class SequenceVariantTests(unittest.TestCase):
         generator.generate.return_value = [pose(1)]
         language_model = tool_model(request, count=15)
         with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
-            "langchain_app.services.sequence_agent.init_chat_model", return_value=language_model,
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=language_model,
         ):
             app = AppTest.from_file(str(APP)).run()
             self.assertEqual(app.selectbox(key="sequence-elements-count").value, 9)
@@ -117,7 +154,7 @@ class SequenceVariantTests(unittest.TestCase):
             return generator
 
         with patch("langchain_app.dependencies.get_sequence_generator", side_effect=get_generator), patch(
-            "langchain_app.services.sequence_agent.init_chat_model",
+            "langchain_app.services.assistant_agent.init_chat_model",
             return_value=tool_model(request, count=12),
         ):
             app = AppTest.from_file(str(APP)).run()
@@ -131,7 +168,7 @@ class SequenceVariantTests(unittest.TestCase):
 
     def test_model_failure_is_displayed_without_saving_a_sequence(self):
         with patch(
-            "langchain_app.services.sequence_agent.init_chat_model",
+            "langchain_app.services.assistant_agent.init_chat_model",
             return_value=ToolCallingModel(responses=[AIMessage(content="No tool call")]),
         ):
             app = AppTest.from_file(str(APP)).run()
@@ -180,3 +217,307 @@ class SequenceVariantTests(unittest.TestCase):
             self.assertEqual(len(message["sequence_variants"]), 1)
             self.assertEqual(message["selected_sequence_index"], 0)
             self.assertEqual(message["sequence"]["thumbnails"][0]["alt"], "Pose 1")
+
+    def test_text_reply_in_user_language_is_rendered_and_saved_without_a_sequence(self):
+        generator = Mock()
+        reply = "Какую практику вы хотите?"
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model",
+            return_value=ToolCallingModel(responses=[AIMessage(content=reply)]),
+        ):
+            app = AppTest.from_file(str(APP)).run()
+            app.chat_input[0].set_value("Помоги выбрать практику").run()
+            self.assertFalse(app.exception)
+            self.assertFalse(app.error)
+            self.assertEqual(app.session_state.messages[-1]["content"], reply)
+            self.assertIsNone(app.session_state.messages[-1]["sequence"])
+            self.assertIn(reply, [text.value for text in app.markdown])
+            self.assertFalse(any("New Sequence" in text.value for text in app.markdown))
+            generator.generate.assert_not_called()
+
+    def test_navigation_changes_next_model_context_and_reruns_rebuild_projections(self):
+        request = "Generate a yoga sequence with 9 poses."
+        first_pose = pose(1)
+        first_pose.uuid = str(uuid4())
+        first_pose.catalog_tag_names = ["Standing"]
+        generator = Mock()
+        generator.generate.side_effect = [[first_pose], [pose(2)]]
+        generation_call = tool_model(request).responses[0]
+        model = ToolCallingModel(responses=[
+            generation_call, AIMessage(content="First ready"),
+            generation_call, AIMessage(content="Second ready"),
+            AIMessage(content="The selected pose is Pose 1"),
+        ])
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ), patch("langchain_app.ui.sequence.render_sequence_import") as save:
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            message = app.session_state.messages[-1]
+            first_uuid = message["sequence_uuid"]
+            app.button(key="assistant-sequence-1-regenerate").click().run()
+            calls_before_navigation = len(model.received_messages)
+            app.button(key="assistant-sequence-1-previous").click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.session_state.assistant_agent.active_sequence_uuid, first_uuid)
+            self.assertEqual(len(model.received_messages), calls_before_navigation)
+            # Stored thumbnails are projections, not the source of catalog context.
+            app.session_state.messages[1]["sequence"]["thumbnails"][0]["alt"] = "Incorrect cached thumbnail"
+            app.selectbox(key="sequence-elements-count").set_value(24).run()
+            self.assertEqual(app.session_state.messages[1]["sequence"]["thumbnails"][0]["alt"], "Pose 1")
+            self.assertEqual(app.session_state.assistant_agent.active_sequence_uuid, first_uuid)
+            self.assertEqual(save.call_args.args[0]["info"]["uuid"], first_uuid)
+            self.assertEqual(save.call_args.args[0]["thumbnails"][0]["uuid"], first_pose.uuid)
+            app.chat_input[0].set_value("What is the first pose?").run()
+            self.assertFalse(app.exception)
+            self.assertEqual(selected_snapshot(model)["uuid"], first_uuid)
+            self.assertEqual(selected_snapshot(model)["elements"][0]["catalog_item"]["catalog_tag_names"], ["Standing"])
+            self.assertEqual(generator.generate.call_count, 2)
+            self.assertIsNone(app.session_state.messages[-1]["sequence"])
+            self.assertEqual(app.session_state.messages[-1]["content"], "The selected pose is Pose 1")
+
+    def test_using_an_older_card_is_not_overridden_by_rendering_a_later_card(self):
+        generator = Mock()
+        generator.generate.side_effect = [[pose(1)], [pose(2)]]
+        generation_call = tool_model().responses[0]
+        model = ToolCallingModel(responses=[
+            generation_call, AIMessage(content="Ready"),
+            generation_call, AIMessage(content="Ready"),
+            AIMessage(content="Pose 1 is selected"),
+        ])
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            first_uuid = app.session_state.messages[1]["sequence_uuid"]
+            app.button(key="generate-sequence").click().run()
+            self.assertNotEqual(app.session_state.assistant_agent.active_sequence_uuid, first_uuid)
+            calls_before_selection = len(model.received_messages)
+            app.button(key="assistant-sequence-1-use").click().run()
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.session_state.assistant_agent.active_sequence_uuid, first_uuid)
+            self.assertEqual(len(model.received_messages), calls_before_selection)
+            self.assertEqual([caption.value for caption in app.caption].count("Active sequence"), 1)
+            app.chat_input[0].set_value("What is selected?").run()
+            self.assertEqual(selected_snapshot(model)["uuid"], first_uuid)
+            self.assertEqual(generator.generate.call_count, 2)
+
+    def test_regenerate_older_card_uses_its_source_and_family(self):
+        first_request = "Generate a yoga sequence with 9 poses."
+        second_request = "Generate a yoga sequence with 12 poses."
+        generator = Mock()
+        generator.generate.side_effect = [[pose(1)], [pose(2)], [pose(3)]]
+        model = ToolCallingModel(responses=[
+            tool_model(first_request).responses[0], AIMessage(content="Ready"),
+            tool_model(second_request, count=12).responses[0], AIMessage(content="Ready"),
+            tool_model(first_request).responses[0], AIMessage(content="Ready"),
+        ])
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            first_uuid = app.session_state.messages[1]["sequence_uuid"]
+            service = app.session_state.assistant_agent
+            first = service.get_sequence(first_uuid)
+            app.selectbox(key="sequence-elements-count").set_value(12)
+            app.button(key="generate-sequence").click().run()
+            second_uuid = service.active_sequence_uuid
+            app.button(key="assistant-sequence-1-regenerate").click().run()
+            self.assertFalse(app.exception)
+            regenerated = service.get_sequence(service.active_sequence_uuid)
+            self.assertEqual(regenerated.parent_uuid, first.uuid)
+            self.assertEqual(regenerated.family_uuid, first.family_uuid)
+            self.assertNotEqual(regenerated.family_uuid, service.get_sequence(second_uuid).family_uuid)
+            self.assertEqual(model.received_requests, [first_request, second_request, first_request])
+            self.assertEqual(selected_snapshot(model, 4)["uuid"], first_uuid)
+            self.assertEqual(len(service.state["sequences"]), 3)
+
+    def test_committed_snapshot_is_shown_even_when_model_reply_fails(self):
+        generator = Mock()
+        generator.generate.return_value = [pose(1)]
+        model = ErrorAfterGenerationModel(responses=[
+            tool_model().responses[0], AIMessage(content="Pose 1 remains selected"),
+        ])
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(len(app.session_state.messages), 2)
+            sequence_uuid = app.session_state.messages[-1]["sequence_uuid"]
+            self.assertEqual(app.session_state.assistant_agent.active_sequence_uuid, sequence_uuid)
+            self.assertEqual(app.session_state.messages[-1]["sequence"]["thumbnails"][0]["alt"], "Pose 1")
+            app.chat_input[0].set_value("What is selected?").run()
+            self.assertFalse(app.exception)
+            self.assertEqual(selected_snapshot(model)["uuid"], sequence_uuid)
+            generator.generate.assert_called_once()
+
+    def test_streamlit_sessions_do_not_share_assistant_state(self):
+        generator = Mock()
+        generator.generate.return_value = [pose(1)]
+        first_model = tool_model()
+        second_model = ToolCallingModel(responses=[AIMessage(content="No selected sequence")])
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", side_effect=[first_model, second_model],
+        ):
+            first_app = AppTest.from_file(str(APP)).run()
+            first_app.button(key="generate-sequence").click().run()
+            second_app = AppTest.from_file(str(APP)).run()
+            second_app.chat_input[0].set_value("What is selected?").run()
+            self.assertFalse(first_app.exception)
+            self.assertFalse(second_app.exception)
+            self.assertIsNot(first_app.session_state.assistant_agent, second_app.session_state.assistant_agent)
+            self.assertIsNone(second_app.session_state.assistant_agent.active_sequence_uuid)
+            self.assertIsNone(selected_snapshot(second_model))
+            self.assertEqual(len(first_app.session_state.assistant_agent.state["sequences"]), 1)
+
+    def test_failed_regenerate_of_an_older_card_keeps_active_sequence_and_history(self):
+        def fail():
+            yield pose(3)
+            raise ValueError("Partial generation failed")
+
+        generator = Mock()
+        generator.generate.side_effect = [[pose(1)], [pose(2)], fail()]
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            active_before = service.active_sequence_uuid
+            snapshots_before = service.state["sequences"]
+            app.button(key="assistant-sequence-1-regenerate").click().run()
+            self.assertFalse(app.exception)
+            self.assertTrue(app.error)
+            self.assertEqual(service.active_sequence_uuid, active_before)
+            self.assertEqual(service.state["sequences"], snapshots_before)
+            self.assertEqual(len(app.session_state.messages[1]["sequence_variants"]), 1)
+
+    def test_replacement_of_selected_older_variant_has_history_save_and_original_regenerate_request(self):
+        request = "Generate a yoga sequence with 9 poses."
+        generator = Mock()
+        generator.generate.side_effect = [
+            [catalog_pose(n) for n in (1, 2, 3)],
+            [catalog_pose(n) for n in (4, 5, 6)],
+            [catalog_pose(n) for n in (7, 8, 10)],
+        ]
+        catalog = Mock()
+        candidate = catalog_pose(9, bilateral=True)
+        catalog.search.return_value = [candidate]
+        model = tool_model(request)
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.dependencies.get_catalog_item_service", return_value=catalog,
+        ), patch("langchain_app.services.assistant_agent.init_chat_model", return_value=model), patch(
+            "langchain_app.ui.sequence.render_sequence_import",
+        ) as save:
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            app.button(key="assistant-sequence-1-regenerate").click().run()
+            regenerated_uuid = service.active_sequence_uuid
+            app.button(key="assistant-sequence-1-previous").click().run()
+            self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+            model.responses = [
+                tool_call("search_catalog_items", name="Tree"), replacement_call(source),
+                AIMessage(content="Заменена Pose 3 на Pose 9."),
+            ]
+            app.chat_input[0].set_value("Замени третью на дерево").run()
+            self.assertFalse(app.exception)
+            self.assertFalse(app.error)
+            message = app.session_state.messages[-1]
+            variant = service.get_sequence(service.active_sequence_uuid)
+            variant_uuid = str(variant.uuid)
+            self.assertEqual(variant.parent_uuid, source.uuid)
+            self.assertEqual(message["sequence_variant_uuids"], [str(source.uuid), regenerated_uuid, variant_uuid])
+            self.assertEqual(message["selected_sequence_index"], 2)
+            self.assertEqual(message["sequence_uuid"], variant_uuid)
+            self.assertEqual(message["sequence_request"], request)
+            self.assertEqual(message["sequence"]["thumbnails"][2]["alt"], "Pose 9")
+            self.assertEqual(service.get_sequence(str(source.uuid)), source)
+            self.assertEqual(generator.generate.call_count, 2)
+            self.assertEqual(message["content"], "Заменена Pose 3 на Pose 9.")
+            saved = save.call_args.args[0]
+            self.assertEqual(saved["info"]["uuid"], variant_uuid)
+            self.assertEqual(saved["thumbnails"][2]["uuid"], candidate.uuid)
+            self.assertTrue(saved["thumbnails"][2]["start_mirror"])
+            self.assertTrue(saved["thumbnails"][2]["end_mirror"])
+            self.assertEqual([item["order"] for item in saved["thumbnails"]], [1, 2, 3])
+            calls_before_navigation = len(model.received_messages)
+            app.button(key="assistant-sequence-3-previous").click().run()
+            app.button(key="assistant-sequence-3-previous").click().run()
+            self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+            self.assertEqual(app.session_state.messages[-1]["sequence"]["thumbnails"][2]["alt"], "Pose 3")
+            self.assertEqual(save.call_args.args[0]["info"]["uuid"], str(source.uuid))
+            app.button(key="assistant-sequence-3-next").click().run()
+            app.button(key="assistant-sequence-3-next").click().run()
+            app.session_state.messages[-1]["sequence_variants"] = []
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.session_state.messages[-1]["sequence_uuid"], variant_uuid)
+            self.assertEqual(save.call_args.args[0]["info"]["uuid"], variant_uuid)
+            self.assertEqual(len(model.received_messages), calls_before_navigation)
+            self.assertEqual(len(service.state["sequences"]), 3)
+            model.responses = [tool_model(request).responses[0], AIMessage(content="Regenerated")]
+            app.button(key="assistant-sequence-3-regenerate").click().run()
+            self.assertFalse(app.exception)
+            regenerated = service.get_sequence(service.active_sequence_uuid)
+            self.assertEqual(regenerated.parent_uuid, variant.uuid)
+            self.assertEqual(regenerated.family_uuid, source.family_uuid)
+            self.assertEqual(regenerated.generation_request, request)
+            generator.generate.assert_called_with(request, language="en", count=9)
+
+    def test_committed_replacement_is_retained_in_ui_when_text_reply_fails(self):
+        generator = Mock()
+        generator.generate.return_value = [catalog_pose(n) for n in (1, 2, 3)]
+        catalog = Mock()
+        catalog.search.return_value = [catalog_pose(9)]
+        model = ErrorAfterReplacementModel(responses=tool_model().responses)
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.dependencies.get_catalog_item_service", return_value=catalog,
+        ), patch("langchain_app.services.assistant_agent.init_chat_model", return_value=model):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            model.responses = [tool_call("search_catalog_items", name="Tree"), replacement_call(source)]
+            app.chat_input[0].set_value("Replace third").run()
+            self.assertFalse(app.exception)
+            variant_uuid = service.active_sequence_uuid
+            self.assertNotEqual(variant_uuid, str(source.uuid))
+            self.assertEqual(app.session_state.messages[-1]["sequence_uuid"], variant_uuid)
+            self.assertEqual(app.session_state.messages[-1]["sequence"]["thumbnails"][2]["alt"], "Pose 9")
+            self.assertEqual(app.session_state.messages[-1]["sequence_variant_uuids"], [str(source.uuid), variant_uuid])
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(service.active_sequence_uuid, variant_uuid)
+            self.assertEqual(app.session_state.messages[-1]["sequence_uuid"], variant_uuid)
+            self.assertEqual(len(service.state["sequences"]), 2)
+            generator.generate.assert_called_once()
+
+    def test_no_change_replacement_does_not_create_a_variant_or_sequence_card(self):
+        generator = Mock()
+        generator.generate.return_value = [catalog_pose(n) for n in (1, 2, 3)]
+        catalog = Mock()
+        model = tool_model()
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.dependencies.get_catalog_item_service", return_value=catalog,
+        ), patch("langchain_app.services.assistant_agent.init_chat_model", return_value=model):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            catalog.search.return_value = [source.elements[2].catalog_item]
+            model.responses = [
+                tool_call("search_catalog_items", name="Pose 3"), replacement_call(source, 3),
+                AIMessage(content="Pose 3 is already selected."),
+            ]
+            app.chat_input[0].set_value("Replace third with Pose 3").run()
+            self.assertFalse(app.exception)
+            self.assertIsNone(app.session_state.messages[-1]["sequence"])
+            self.assertEqual(app.session_state.messages[-1]["content"], "Pose 3 is already selected.")
+            self.assertEqual(len(service.state["sequences"]), 1)
+            self.assertEqual(service.active_sequence_uuid, str(source.uuid))

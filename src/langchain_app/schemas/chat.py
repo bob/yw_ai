@@ -9,6 +9,8 @@ if TYPE_CHECKING:
 
 
 class _OptionalChatMessageFields(TypedDict, total=False):
+    sequence_uuid: str | None
+    sequence_variant_uuids: list[str]
     sequence: SequenceView | None
     sequence_request: str
     sequence_variants: list[SequenceView]

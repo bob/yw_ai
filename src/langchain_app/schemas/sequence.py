@@ -3,26 +3,12 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, HttpUrl, NonNegativeInt, PositiveInt
+from pydantic import NonNegativeInt, PositiveInt
+
+from langchain_app.schemas.base import ApiSchema
+from langchain_app.schemas.catalog import CatalogItemSchema
 
 Language = Literal["en", "uk", "ru"]
-
-
-class ApiSchema(BaseModel):
-    """Base model for responses whose shape is controlled by the API contract."""
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class CatalogItemSchema(ApiSchema):
-    """Localized catalog item returned by the public catalog APIs."""
-
-    id: PositiveInt
-    uuid: str | None
-    name: str
-    bilateral: bool
-    image_url: HttpUrl | None
-    catalog_tag_names: list[str]
 
 
 class SequenceElementSchema(ApiSchema):

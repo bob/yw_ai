@@ -1,11 +1,11 @@
 """Application services and external API clients."""
 
 from langchain_app.services.catalog_item import (
-    CatalogFolderNotFoundError,
     CatalogItemApiError,
     CatalogItemService,
     CatalogItemServiceError,
 )
+from langchain_app.services.catalog_errors import CatalogFolderNotFoundError
 from langchain_app.services.sequence import (
     SequenceApiError,
     SequenceNotFoundError,
@@ -14,7 +14,8 @@ from langchain_app.services.sequence import (
     SequenceValidationError,
 )
 from langchain_app.services.sequence_generator import SequenceGenerator
-from langchain_app.services.sequence_agent import SequenceAgent, SequenceAgentError
+from langchain_app.services.assistant_agent import AssistantAgent, AssistantAgentError
+from langchain_app.services.catalog_tag import CatalogTagApiError, CatalogTagService
 from langchain_app.services.type_safe import (
     TypeSafeSelectionError,
     TypeSafeService,
@@ -32,8 +33,10 @@ __all__ = [
     "SequenceServiceError",
     "SequenceValidationError",
     "SequenceGenerator",
-    "SequenceAgent",
-    "SequenceAgentError",
+    "AssistantAgent",
+    "AssistantAgentError",
+    "CatalogTagApiError",
+    "CatalogTagService",
     "TypeSafeSelectionError",
     "TypeSafeService",
     "TypeSafeServiceError",

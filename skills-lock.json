@@ -151,6 +151,12 @@
       "skillPath": "config/skills/managed-deep-agents/SKILL.md",
       "computedHash": "20734cdcb22c5bda57b8010f0394d230cda4c7ea23db1e3a42951a2f1c6a100d"
     },
+    "show-me": {
+      "source": "humanlayer/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/show-me/skills/show-me/SKILL.md",
+      "computedHash": "43766f53afe7eb9feba0bb7716590c35cbb8d39d4a91eddef50e9566a6f6ae19"
+    },
     "swarm": {
       "source": "langchain-ai/langchain-skills",
       "sourceType": "github",
