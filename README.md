@@ -1,8 +1,10 @@
 # LangChain app
 
 The Sequence Generator keeps the pose count and **Generate** at the top and a
-chat prompt at the bottom. **Generate** fills and submits a text request such as
-`Generate a yoga sequence with 12 poses.` You can also type a request directly.
+chat prompt at the bottom. **Generate** submits a text request such as
+`Generate a yoga sequence with 12 poses.` without filling the input. You can also
+type a request directly. After each response, the input is cleared and focused
+so you can immediately type the next request.
 Both paths use `AssistantAgent`, a single LangChain agent with tools in
 `langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
 `show_catalog_items`, `get_catalog_tag_names`, and `replace_sequence_element`. Generation still uses
@@ -10,6 +12,16 @@ the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
 tag queries, and text replies can run without generation. Both catalog endpoints
 always receive `language=en`; the assistant replies in the user's language and
 keeps item names and tags exactly as returned by the API.
+
+Ask for a specific first pose when generating a sequence, for example
+“Generate 12 poses, starting with Tree pose.” The assistant resolves the real
+catalog item and passes `starting_catalog_item_id`; it overrides the random start
+and does not require `Other/Starting`. Without an explicit first pose, starting
+positions are chosen with probabilities of 10% lying, 60% sitting, and 30% standing,
+then a pose is chosen randomly within that position. After a lying start, the
+second pose must be lying on the back. After a standing start, the second pose
+must not be lying, with standing preferred.
+See [feature 004: starting sequence element](docs/specs/004-starting-sequence-element/README.md).
 
 Ask to browse catalog poses, ask which poses are available, or find replacement
 candidates without changing a sequence. After searching, the assistant selects
@@ -26,11 +38,17 @@ including when the model's final text fails. New searches and later selections
 leave earlier messages unchanged.
 See [feature 003: catalog item display](docs/specs/003-catalog-items-display/README.md).
 
-You can specify a duration in minutes instead of a pose count: each pose
-takes 40 seconds, so 10 minutes means 15 poses. Fractional counts round to the
-nearest integer (halves round up), with a minimum of one pose. An explicit pose
-count takes precedence over duration. If neither is specified, the agent uses
-9 poses. **Regenerate** resends the original prompt. Set `ASSISTANT_AGENT_MODEL`
+You can specify a duration in minutes instead of a pose count: an ordinary pose
+takes 40 seconds, while a mirrored (bilateral) pose takes 80 seconds for both
+sides and remains one sequence element. The generator accounts for selected
+mirrored poses while building the sequence, so 10 minutes allows up to 15
+ordinary poses, fewer with mirrored poses. The time budget rounds to the nearest
+40 seconds (halves round up), with at least one pose; the last mirrored pose can
+exceed the rounded budget by 40 seconds. An explicit pose count takes precedence
+over duration. **Every generated sequence is limited to 45 elements**, even for
+requests with a higher count or longer duration. If neither is specified, the
+agent uses 9 poses. See [feature 005: sequence duration and limit](docs/specs/005-sequence-duration-and-limit/README.md).
+**Regenerate** resends the original prompt. Set `ASSISTANT_AGENT_MODEL`
 to change the model. A nonempty `SEQUENCE_AGENT_MODEL` remains a fallback for
 existing `.env` files; the default is `openai:gpt-5.5`.
 The agent requires `OPENAI_API_KEY` in addition to the existing

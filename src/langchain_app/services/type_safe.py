@@ -27,6 +27,10 @@ class TypeSafeService:
         "Prefer alternating between flexion and extension poses.",
         "Add at least one twist pose.",
         "Do not use 'starting' poses except at the beginning of the sequence.",
+        "If the first pose is lying down (any Position/Lying tag), the second pose "
+        "must have the Position/Lying on the back tag.",
+        "If the first pose has the Position/Standing tag, prefer a second pose with "
+        "Position/Standing; the second pose must not have any Position/Lying tag.",
         "Prefer ending with a finishing pose."
     )
 

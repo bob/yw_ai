@@ -38,6 +38,7 @@ class ResponseProgressUITests(unittest.TestCase):
         self.assertEqual(statuses[-1].proto.state, 3 if outcome == "error" else 2)
         self.assertEqual(app.session_state.pending_response, None)
         self.assertFalse(app.chat_input[0].disabled)
+        self.assertEqual(app.chat_input[0].proto.value, "")
         self.assertFalse(app.button(key="generate-sequence").disabled)
         return snapshot
 

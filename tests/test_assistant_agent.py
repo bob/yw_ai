@@ -15,6 +15,7 @@ from pydantic import Field
 from langchain_app.schemas import CatalogItemSchema
 from langchain_app.services.assistant_agent import AssistantAgent, AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
+from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.tools import ASSISTANT_TOOLS
 
 
@@ -106,7 +107,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(list(sequence), poses[1:])
         factory.assert_called_once()
         generator.generate.assert_called_once_with(
-            request, language="en", count=12, progress_observer=ANY,
+            request, language="en", count=12, starting_catalog_item_id=None, progress_observer=ANY,
         )
         self.assertEqual(model.received_requests, [request])
 
@@ -118,6 +119,45 @@ class AssistantAgentTests(unittest.TestCase):
         with self.assertRaisesRegex(AssistantAgentError, "did not call"):
             list(service.generate("practice", language="en"))
         factory.assert_not_called()
+
+    def test_catalog_search_resolves_first_pose_and_generation_preserves_it(self):
+        requested = pose(42)
+        requested.name = "Tree pose"
+        requested.catalog_tag_names = ["Position/Standing"]
+        random_start = pose(1)
+        random_start.catalog_tag_names = ["Other/Starting", "Position/Sitting"]
+        following = pose(43)
+        following.catalog_tag_names = ["Position/Standing", "Other/Finishing"]
+        catalog = Mock()
+        catalog.search.side_effect = [[requested], [random_start, requested, following]]
+        selector = Mock()
+        selector.choose_next_catalog_item.side_effect = lambda candidates, **kwargs: candidates[0]
+        request = "Сгенерируй две асаны, первой поставь позу дерева"
+        model = ToolCallingModel(responses=[
+            tool_call("search_catalog_items", name="Tree"),
+            tool_call("generate_sequence", request=request, count=2, starting_catalog_item_id=42),
+            AIMessage(content="Секвенция готова."),
+        ])
+        generator = SequenceGenerator(catalog, selector)
+        service = assistant(lambda: generator, catalog_item_service=catalog, model=model)
+        self.assertEqual(list(service.generate(request, language="en")), [requested, following])
+        sequence = service.get_sequence(service.active_sequence_uuid)
+        self.assertEqual([element.catalog_item.id for element in sequence.elements], [42, 43])
+        self.assertEqual(catalog.search.call_count, 2)
+        selector.choose_next_catalog_item.assert_called_once()
+        self.assertEqual(selector.choose_next_catalog_item.call_args.kwargs["selected_items"][0], requested)
+
+    def test_invalid_starting_item_id_does_not_start_generation(self):
+        for item_id in (0, -1, True, "42", 1.5):
+            with self.subTest(item_id=item_id):
+                factory = Mock()
+                service = assistant(factory, model=ToolCallingModel(responses=[
+                    tool_call("generate_sequence", request="practice", count=2, starting_catalog_item_id=item_id),
+                    AIMessage(content="Invalid first pose ID."),
+                ]))
+                with self.assertRaises(AssistantAgentError):
+                    list(service.generate("practice", language="en"))
+                factory.assert_not_called()
 
     def test_partial_generation_failure_is_propagated(self):
         def generate(*args, **kwargs):
@@ -164,6 +204,13 @@ class AssistantAgentTests(unittest.TestCase):
                              & set(registered_tool.tool_call_schema.model_fields))
         self.assertEqual(list(ASSISTANT_TOOLS[2].tool_call_schema.model_fields), [])
         prompt = model.received_messages[0][0].text
+        start_field = ASSISTANT_TOOLS[0].tool_call_schema.model_fields["starting_catalog_item_id"]
+        self.assertFalse(start_field.is_required())
+        self.assertIsNone(start_field.default)
+        self.assertIn("pass starting_catalog_item_id to generate_sequence", prompt)
+        self.assertIn("a mirrored (bilateral) pose takes 80 seconds", prompt)
+        self.assertIn("Mandatory rule: generate at most 45 elements", prompt)
+        self.assertIn("leave duration_seconds null in that case", prompt)
         self.assertIn("Always reply in the user's language", prompt)
         self.assertIn("keep item names and tag names exactly as returned by the API", prompt)
         factory.assert_not_called()
@@ -216,8 +263,79 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(snapshot["elements"][0]["catalog_item"]["name"], "Child's pose")
         self.assertEqual(snapshot["language"], "en")
         generator.generate.assert_called_once_with(
-            "Практика из одной асаны", language="en", count=1, progress_observer=ANY,
+            "Практика из одной асаны", language="en", count=1, starting_catalog_item_id=None, progress_observer=ANY,
         )
+
+    def test_duration_reaches_generator_and_regeneration_keeps_mirrored_accounting(self):
+        poses = [pose(n) for n in range(1, 7)]
+        poses[0].catalog_tag_names = ["Other/Starting"]
+        poses[0].bilateral = poses[2].bilateral = True
+        poses[3].catalog_tag_names = ["Other/Finishing"]
+        catalog = Mock()
+        catalog.search.return_value = poses
+        selector = Mock()
+        selector.choose_next_catalog_item.side_effect = lambda candidates, **kwargs: candidates[0]
+        generator = SequenceGenerator(catalog, selector)
+        request = "Секвенция на четыре минуты"
+        model = ToolCallingModel(responses=[
+            tool_call("generate_sequence", request=request, count=6, duration_seconds=240),
+            AIMessage(content="Готово."),
+        ])
+        service = assistant(lambda: generator, model=model)
+        with patch("langchain_app.services.sequence_generator.sample", side_effect=lambda population, k: population[:k]):
+            self.assertEqual(list(service.generate(request)), poses[:4])
+            original = service.get_sequence(service.active_sequence_uuid)
+            self.assertEqual(list(service.generate("", sequence_uuid=str(original.uuid))), poses[:4])
+        sequence = service.get_sequence(service.active_sequence_uuid)
+        self.assertEqual(sequence.elements_count, 4)
+        self.assertEqual(sequence.parent_uuid, original.uuid)
+        self.assertEqual(sequence.generation_request, request)
+        self.assertEqual([element.start_mirror for element in sequence.elements], [True, False, True, False])
+
+    def test_generation_count_above_limit_is_rejected_before_factory_and_can_be_corrected(self):
+        generator = Mock()
+        generator.generate.return_value = [pose(n) for n in range(1, 46)]
+        factory = Mock(return_value=generator)
+        model = ToolCallingModel(responses=[
+            tool_call("generate_sequence", request="46 poses", count=46),
+            tool_call("generate_sequence", request="46 poses", count=45),
+            AIMessage(content="Максимум — 45 асан."),
+        ])
+        service = assistant(factory, model=model)
+        self.assertEqual(len(list(service.generate("46 poses"))), 45)
+        factory.assert_called_once()
+        generator.generate.assert_called_once_with(
+            "46 poses", language="en", count=45, starting_catalog_item_id=None, progress_observer=ANY,
+        )
+        self.assertEqual(model.received_messages[1][-1].status, "error")
+        self.assertIn("less than or equal to 45", model.received_messages[1][-1].content)
+
+    def test_invalid_duration_does_not_start_generation(self):
+        for duration in (0, -1, float("inf"), float("nan")):
+            with self.subTest(duration=duration):
+                factory = Mock()
+                service = assistant(factory, model=ToolCallingModel(responses=[
+                    tool_call("generate_sequence", request="practice", count=1, duration_seconds=duration),
+                    AIMessage(content="Укажите положительную длительность."),
+                ]))
+                list(service.stream("practice"))
+                factory.assert_not_called()
+                self.assertEqual(service._model.received_messages[1][-1].status, "error")
+
+    def test_generator_cannot_commit_or_stream_more_than_45_elements(self):
+        generator = Mock()
+        generator.generate.return_value = [pose(n) for n in range(1, 47)]
+        model = ToolCallingModel(responses=[
+            tool_call("generate_sequence", request="45 poses", count=45),
+            AIMessage(content="Ошибка генератора."),
+        ])
+        service = assistant(lambda: generator, model=model)
+        output = list(service.stream("45 poses"))
+        self.assertEqual(len([value for value in output if isinstance(value, CatalogItemSchema)]), 45)
+        self.assertIsNone(service.active_sequence_uuid)
+        message = model.received_messages[1][-1]
+        self.assertEqual(message.status, "error")
+        self.assertEqual(json.loads(message.content)["code"], "sequence_limit_exceeded")
 
     def test_catalog_api_error_is_returned_to_model_as_error_not_empty_success(self):
         catalog = Mock()

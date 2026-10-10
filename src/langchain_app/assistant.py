@@ -10,6 +10,7 @@ from langchain_app.dependencies import get_assistant_agent
 from langchain_app.schemas import ChatMessage, Language
 from langchain_app.services.assistant_agent import AssistantAgent
 from langchain_app.ui import SequenceRenderer
+from langchain_app.ui.chat_input import focus_chat_input
 from langchain_app.ui.response_progress import (
     PendingResponse,
     enqueue_response,
@@ -46,7 +47,7 @@ def generate_sequence() -> None:
     if st.session_state.pending_response is not None:
         return
     request = f"Generate a yoga sequence with {st.session_state['sequence-elements-count']} poses."
-    st.session_state["sequence-prompt"] = request
+    st.session_state["sequence-prompt"] = ""
     enqueue_response(PendingResponse(request, require_generation=True))
 
 
@@ -83,13 +84,17 @@ sequence_renderer = SequenceRenderer(
 sequence_renderer.render_styles()
 sequence_renderer.render_messages(messages, disabled=busy)
 
-if prefill := st.session_state.pop("sequence-prompt-prefill", None):
-    st.session_state["sequence-prompt"] = prefill
+reset_prompt = st.session_state.pop("sequence-prompt-reset", False)
+if reset_prompt:
+    st.session_state["sequence-prompt"] = ""
 
 st.chat_input(
     "Ask about yoga, search the catalog, or generate or edit a sequence…", key="sequence-prompt",
     disabled=busy, submit_mode="disable", on_submit=submit_chat,
 )
+if reset_prompt:
+    focus_chat_input(reset_prompt)
+
 if pending is not None:
     try:
         response = sequence_renderer.render_response(
@@ -98,8 +103,6 @@ if pending is not None:
         if pending.message_index is None:
             # Every attempt is retained, including errors and empty public replies.
             messages.append(response)
-            if pending.require_generation:
-                st.session_state["sequence-prompt-prefill"] = pending.request
         else:
             message = messages[pending.message_index]
             execution = response.get("execution")
@@ -116,4 +119,5 @@ if pending is not None:
                 message["selected_sequence_index"] = response.get("selected_sequence_index", 0)
     finally:
         st.session_state.pending_response = None
+        st.session_state["sequence-prompt-reset"] = pending.request_id
     st.rerun()

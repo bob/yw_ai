@@ -12,19 +12,43 @@ from pydantic import Field
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.services.sequence_editor import SequenceEditorError, replace_element
+from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS
 from langchain_app.tools.context import AssistantToolContext, tool_error
 
 
 @tool
 def generate_sequence(
     request: Annotated[str, Field(min_length=1)],
-    count: Annotated[int, Field(gt=0, strict=True)],
+    count: Annotated[int, Field(
+        gt=0, le=MAX_SEQUENCE_ELEMENTS, strict=True,
+        description="Pose count or duration-based upper estimate; mandatory maximum is 45 elements.",
+    )],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
+    starting_catalog_item_id: Annotated[int | None, Field(
+        gt=0, strict=True,
+        description="Verified catalog item ID requested as the first pose; null uses a random start.",
+    )] = None,
+    duration_seconds: Annotated[float | None, Field(
+        gt=0, allow_inf_nan=False,
+        description="Requested practice duration in seconds; null when an explicit pose count is given.",
+    )] = None,
 ) -> Command | ToolMessage:
     """Generate a yoga sequence using the user's full request and inferred pose count.
 
     Preserve every preference and constraint in request. Use an explicit count
-    when present, otherwise infer count from duration using 40 seconds per pose.
+    when present and leave duration_seconds null. Otherwise infer an upper count
+    from duration using 40 seconds per ordinary pose, round halves up, and pass
+    the requested duration_seconds. Mirrored (bilateral) poses take 80 seconds,
+    so the generator adjusts the actual element count during selection.
+    Mandatory rule: never generate more than 45 elements, including when the
+    user requests a higher count or a longer duration. Cap count at 45 and
+    explain the limit. A mirrored pose is one element but takes twice the time.
+    If the user specifies a first pose, resolve it using catalog search or the
+    selected sequence and pass starting_catalog_item_id. It takes priority over
+    the random start and does not require the Other/Starting tag. Leave it null
+    when no first pose is requested; random positions are lying 10%, sitting 60%,
+    standing 30%. After a lying start the second pose must be lying on the back;
+    after a standing start prefer standing and never choose a lying second pose.
     """
     if not request.strip():
         return tool_error(runtime, "invalid_arguments", "request must not be blank")
@@ -35,8 +59,15 @@ def generate_sequence(
     generator = context.generator_factory()
     items = []
     for item in generator.generate(
-        request, language="en", count=count, progress_observer=runtime.stream_writer,
+        request, language="en", count=count, starting_catalog_item_id=starting_catalog_item_id,
+        **({"duration_seconds": duration_seconds} if duration_seconds is not None else {}),
+        progress_observer=runtime.stream_writer,
     ):
+        if len(items) >= MAX_SEQUENCE_ELEMENTS:
+            return tool_error(
+                runtime, "sequence_limit_exceeded",
+                f"Generation must not return more than {MAX_SEQUENCE_ELEMENTS} elements",
+            )
         items.append(item.model_copy(deep=True))
         runtime.stream_writer(item)
     if not items:
