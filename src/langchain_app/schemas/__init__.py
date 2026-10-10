@@ -5,6 +5,7 @@ from langchain_app.schemas.catalog import CatalogItemSchema
 from langchain_app.schemas.generated_sequence import GeneratedSequence, GeneratedSequenceElement
 from langchain_app.schemas.response_progress import (
     AssistantMessageEvent,
+    CatalogItemsDisplayedEvent,
     ExecutionMessageSnapshot,
     ExecutionSnapshot,
     ExecutionStepProgress,
@@ -30,6 +31,7 @@ from langchain_app.schemas.sequence import (
 __all__ = [
     "AssistantMessageEvent",
     "CatalogItemSchema",
+    "CatalogItemsDisplayedEvent",
     "ChatMessage",
     "ExecutionMessageSnapshot",
     "ExecutionSnapshot",

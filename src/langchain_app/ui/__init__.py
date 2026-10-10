@@ -1,5 +1,6 @@
 """Reusable Streamlit UI helpers."""
 
+from langchain_app.ui.catalog_items import CatalogItemsRenderer
 from langchain_app.ui.sequence import (
     AsanaThumbnail,
     SequenceInfo,
@@ -13,6 +14,7 @@ from langchain_app.ui.sequence import (
 
 __all__ = [
     "AsanaThumbnail",
+    "CatalogItemsRenderer",
     "SequenceInfo",
     "SequenceRenderer",
     "SequenceView",

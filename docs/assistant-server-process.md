@@ -1,8 +1,8 @@
 # Как работает сервер ассистента: от `assistant.py` до каталога и обратно
 
-Документ описывает фактический код проекта на 8 октября 2026 года, включая текущие изменения рабочей копии. Читаем приложение в порядке выполнения: начинаем с `assistant.py`, при вызове переходим внутрь функции или метода, затем возвращаемся к вызывающему коду. Условные ветки, например Regenerate и Save, разбираются после основного пути запроса.
+Документ описывает фактический код проекта на 10 октября 2026 года, включая текущие изменения рабочей копии. Читаем приложение в порядке выполнения: начинаем с `assistant.py`, при вызове переходим внутрь функции или метода, затем возвращаемся к вызывающему коду. Условные ветки, например Regenerate и Save, разбираются после основного пути запроса.
 
-Это описание реализации. Планы развития находятся отдельно в [спецификации ассистента (фича 001)](specs/001-create-assistant-agent/README.md).
+Это описание реализации. Планы и приёмка находятся в спецификациях [ассистента (001)](specs/001-create-assistant-agent/README.md), [прогресса ответа (002)](specs/002-assistant-response-progress/README.md) и [показа каталога (003)](specs/003-catalog-items-display/README.md).
 
 ## Содержание
 
@@ -12,14 +12,14 @@
 4. [Отрисовка истории до обработки нового запроса](#4-отрисовка-истории-до-обработки-нового-запроса)
 5. [Получение нового запроса в `assistant.py`](#5-получение-нового-запроса-в-assistantpy)
 6. [`render_response()` и создание зависимостей](#6-render_response-и-создание-зависимостей)
-7. [Запуск `AssistantAgent.stream()`](#7-запуск-assistantagentstream)
+7. [Запуск `AssistantAgent.stream_response_events()`](#7-запуск-assistantagentstream_response_events)
 8. [Первый вызов модели и middleware](#8-первый-вызов-модели-и-middleware)
 9. [Переход в инструмент `generate_sequence`](#9-переход-в-инструмент-generate_sequence)
 10. [Внутри `SequenceGenerator.generate()`](#10-внутри-sequencegeneratorgenerate)
 11. [HTTP-поиск: `CatalogItemService` → `CatalogClient`](#11-http-поиск-catalogitemservice--catalogclient)
 12. [Выбор следующей позы в `TypeSafeService`](#12-выбор-следующей-позы-в-typesafeservice)
 13. [Сохранение полного варианта и возврат в интерфейс](#13-сохранение-полного-варианта-и-возврат-в-интерфейс)
-14. [Ветка поиска и получения тегов](#14-ветка-поиска-и-получения-тегов)
+14. [Ветка поиска, тегов и показа каталога](#14-ветка-поиска-тегов-и-показа-каталога)
 15. [Ветка замены одной позы](#15-ветка-замены-одной-позы)
 16. [Previous, Next, Use this sequence и Regenerate](#16-previous-next-use-this-sequence-и-regenerate)
 17. [Save: передача в Asana Catalog через браузер](#17-save-передача-в-asana-catalog-через-браузер)
@@ -47,33 +47,33 @@ HTTP-сервер и связь с браузером предоставляет
 | Языковая модель ассистента | Интерпретирует запрос, выбирает инструменты и их аргументы, пишет ответ пользователю |
 | Внешние сервисы | Asana Catalog возвращает реальные асаны и теги; TypeSafe/Jev выбирает следующую позу из предложенных кандидатов |
 
-Обычный проход генерации выглядит так:
+Основной путь запроса выглядит так:
 
 ```text
-assistant.py
+assistant.py → callback → PendingResponse → отключение контролов
   → SequenceRenderer.render_response()
-    → session_assistant()
-      → get_assistant_agent()
-        → создание/получение сервисов
-        → AssistantAgent(...)
-    → SequenceRenderer._render_catalog_items()
-      → next(catalog_items)
-        → AssistantAgent.stream()
-          → _get_agent() → create_agent(...)
-          → agent.stream_events(version="v3")
-          → stream.interleave("custom", "updates")
-          → модель → generate_sequence
-            → SequenceGenerator.generate()
-              → CatalogItemService.search() → CatalogClient._get() → Asana Catalog
-              → случайная стартовая поза
-              → TypeSafeService.choose_next_catalog_item() → Jev
-            → custom-события с позами
-            → полный GeneratedSequence → Command(update=...)
-          → модель → итоговый текст
-      → готовый вариант → SequenceView
-  → добавление ответа в st.session_state.messages
-  → st.rerun()
+    → ResponseProgressRenderer: Thinking... до создания зависимостей
+    → резервирование отдельных областей текста, каталога и секвенции
+    → session_assistant() → get_assistant_agent()
+    → AssistantAgent.stream_response_events(request_id=...)
+      → request_started → create_agent(...)
+      → stream_events(version="v3", transformers=[CustomTransformer], durability="sync")
+      → interleave("custom", "values") → ResponseProgress
+      → модель → инструмент → модель
+        generate_sequence → SequenceGenerator → каталог / Jev
+          → sequence_element → подтверждение состояния → sequence_committed
+        search_catalog_items → проверенные кандидаты в latest_catalog_items
+        show_catalog_items → проверка ID → catalog_items_displayed
+        replace_sequence_element → новый вариант → sequence_committed
+      → assistant_message(final) → request_finished
+    → фильтрация request_id / event_index → живые области UI
+    → ChatMessage(content, execution, catalog_items?, sequence, ...)
+  → сохранение сообщения → очистка pending_response → st.rerun()
 ```
+
+Поиск сам по себе не показывает каталог. Событие `catalog_items_displayed`
+появляется только из успешного `show_catalog_items`. Потоковые позы генерации
+относятся к секвенции и поступают отдельными `sequence_element`.
 
 `create_agent()` строит агентный граф LangChain на runtime LangGraph. Граф выполняет цикл «модель → инструмент → модель», а сервис `SequenceGenerator` реализует алгоритм подбора поз. Это два разных уровня принятия решений: модель выбирает действие, Jev выбирает конкретную следующую позу.
 
@@ -198,8 +198,12 @@ SequenceRenderer(
 Метод перебирает сохранённые сообщения по порядку. Для каждого он:
 
 1. Открывает `st.chat_message(message["role"])`.
-2. Выводит `message["content"]` как Markdown.
-3. Вызывает `_render_message_sequence(messages, message_index)` для возможной карточки последовательности.
+2. Воспроизводит `execution_history` и `execution` через `render_execution()`.
+3. Выводит непустой `message["content"]` как Markdown.
+4. При непустом `catalog_items` вызывает `CatalogItemsRenderer.render()` с ключом `assistant-catalog-<индекс>`.
+5. Вызывает `_render_message_sequence(messages, message_index)` для возможной карточки последовательности.
+
+Каталожная подборка восстанавливается из отделённого списка `CatalogItemSchema` в самом сообщении. Этот путь не получает ассистента, не запускает модель или поиск и не добавляет UI-снимок в prompt. Старые сообщения без поля `catalog_items` остаются совместимыми. Каталог и секвенция занимают отдельные области после текста.
 
 При первом открытии страницы список пуст, поэтому цикл ничего не делает. При последующих проходах он восстанавливает весь видимый диалог.
 
@@ -266,65 +270,38 @@ SequenceRenderer(
 
 ## 5. Получение нового запроса в `assistant.py`
 
-### 5.1. Generate превращается в обычный текст
+Generate вызывает callback `generate_sequence()`, который формирует текст
+`Generate a yoga sequence with <число> poses.`, заполняет поле ввода и ставит
+`PendingResponse(request, require_generation=True)` через `enqueue_response()`.
+Чат вызывает `submit_chat()` и ставит обычный `PendingResponse(request)`.
+Regenerate передаёт также UUID источника и индекс существующего сообщения.
 
-Сначала `generated_prompt = None`.
+`enqueue_response()` не принимает второй запрос, пока первый выполняется.
+Для нового сообщения callback сразу добавляет пользователя в историю.
+Следующий проход показывает историю и отключённые Generate, поле ввода,
+Regenerate и навигацию вариантов до начала работы модели.
 
-Если в этом проходе нажата Generate, приложение формирует:
-
-```python
-generated_prompt = f"Generate a yoga sequence with {elements_count} poses."
-st.session_state["sequence-prompt"] = generated_prompt
-```
-
-Например, при выборе 12 получится `Generate a yoga sequence with 12 poses.`. Таким образом, форма использует тот же путь обработки текста, что и чат.
-
-Если Generate не нажата, приложение проверяет `sequence-prompt-prefill` через `pop()`. При наличии значения переносит его в `sequence-prompt` и удаляет временный ключ. Это нужно, чтобы восстановить заполненный текст после успешной генерации и повторной отрисовки.
-
-Значение для поля задаётся до создания `st.chat_input()`, в соответствии с жизненным циклом Streamlit-виджета.
-
-### 5.2. `st.chat_input()` и `request`
-
-`st.chat_input(..., key="sequence-prompt")` создаёт поле для произвольного запроса. Переменная `prompt` содержит отправленный текст, когда пользователь отправляет сообщение.
-
-Строка:
+При наличии `pending_response` точка входа вызывает:
 
 ```python
-request = generated_prompt or prompt
-```
-
-выбирает текст от Generate, если он был сформирован, иначе текст чата. При отсутствии запроса блок `if request:` не выполняется: сервер только показывает страницу и историю.
-
-### 5.3. Сохранение и показ пользовательского сообщения
-
-При наличии `request` сначала добавляется:
-
-```python
-{"role": "user", "content": request}
-```
-
-в UI-список `messages`, затем тот же текст сразу показывается через `st.chat_message("user")` и `st.markdown()`.
-
-После этого вызывается:
-
-```python
-sequence_renderer.render_response(
-    request,
-    content="",
-    key="assistant-sequence-live",
-    require_generation=generated_prompt is not None,
+response = sequence_renderer.render_response(
+    pending.request, content="", key="assistant-sequence-live", pending=pending,
 )
 ```
 
-Generate передаёт `require_generation=True`. Для обычного чата флаг равен `False`: допустим текстовый ответ, поиск, уточнение или замена без генерации.
-
-Теперь переходим внутрь `render_response()`.
+Для нового запроса сохраняется любой ответ, включая ошибку и отсутствие текста.
+Для Regenerate обновляется существующая карточка; предыдущее выполнение
+сохраняется через `retain_execution()`. В `finally` очищается `pending_response`,
+после чего выполняется `st.rerun()`. Существующее поле `catalog_items` сообщения
+не изменяется Regenerate: обязательная генерация не допускает показ каталога.
 
 ## 6. `render_response()` и создание зависимостей
 
 Исходники: [ui/sequence.py](../src/langchain_app/ui/sequence.py), [dependencies.py](../src/langchain_app/dependencies.py), [services/assistant_agent.py](../src/langchain_app/services/assistant_agent.py).
 
 ### 6.1. Получение ассистента
+
+Сначала создаётся `ResponseProgressRenderer` со статусом Thinking... и резервируются три `st.empty()` для текста, каталога и секвенции. Только после этого вызывается фабрика зависимостей. Поэтому начальная обратная связь видна и при медленной инициализации или её ошибке.
 
 `render_response()` проверяет наличие фабрики; иначе выбрасывает `ValueError`.
 
@@ -389,34 +366,30 @@ self._config = {
 
 Возвращаемся через `get_assistant_agent()` в `session_assistant()`: экземпляр сохраняется под ключом `assistant_agent`. Затем возвращаемся в `render_response()`.
 
-### 6.5. Подготовка двух потоков данных в `render_response()`
+### 6.5. Один поток событий и три области вывода
 
-Метод создаёт список `texts`, открывает `st.chat_message("assistant")` и резервирует `text_output = st.empty()` для текста.
+`render_response()` потребляет `assistant.stream_response_events()` с UUID из
+`PendingResponse`. Сначала каждое событие проходит `progress.accept(event)`:
+чужой `request_id`, повторный или меньший `event_index`, а также события после
+`request_finished` отклоняются. UI обновляется только для принятого события.
 
-Далее объявляется вложенный генератор `catalog_items()`:
+Финальный текст собирается из `AssistantMessageEvent(purpose="final")` в
+`progress.execution.final_texts`. `SequenceElementEvent` обновляет временную
+секвенцию; `SequenceCommittedEvent` получает подтверждённый полный вариант из
+ассистента. `CatalogItemsDisplayedEvent` копируется через `model_copy(deep=True)`
+и немедленно передаётся `CatalogItemsRenderer` в зарезервированную область
+после текста, вне статуса. Искусственной задержки нет. За ответ UI принимает
+первую подтверждённую подборку; повторная не заменяет её.
 
-```python
-for chunk in assistant.stream(request, require_generation=require_generation):
-    if isinstance(chunk, CatalogItemSchema):
-        yield chunk
-    else:
-        texts.append(chunk)
-        text_output.markdown("".join(texts))
-```
+### 6.6. Завершение ответа
 
-Он разделяет один поток ассистента на два вида результата: объекты асан передаёт дальше, текст сразу выводит в подготовленное место.
+`progress.finish()` создаёт `ExecutionSnapshot` и показывает публичную ошибку,
+если она есть. Неподтверждённая секвенция очищается. Уже показанная каталожная
+подборка остаётся даже при ошибке следующего model call и при пустом тексте.
+Она возвращается в необязательном `ChatMessage.catalog_items`; без события
+показа поле не создаётся. Сохранение ограничено текущей Streamlit-сессией.
 
-Объявление функции и вызов `catalog_items()` ещё не исполняют её тело: получается Python-итератор. Выполнение начнётся, когда рендерер запросит первый элемент.
-
-### 6.6. `_render_catalog_items()` запускает потребление
-
-`render_response()` вызывает `_render_catalog_items(catalog_items(), key=..., assistant=assistant)`.
-
-Метод сначала запоминает `previous_uuid = assistant.active_sequence_uuid`. Это UUID активного варианта до текущей операции.
-
-Затем `first = next(catalog_items, None)` начинает работу вложенного генератора. Тот начинает перебирать `AssistantAgent.stream()`. Теперь переходим внутрь серверной обработки запроса.
-
-## 7. Запуск `AssistantAgent.stream()`
+## 7. Запуск `AssistantAgent.stream_response_events()`
 
 ### 7.1. Подготовка исходного варианта
 
@@ -434,21 +407,23 @@ for chunk in assistant.stream(request, require_generation=require_generation):
 - `user_request` — фактический запрос этого запуска;
 - `require_generation` — обязательность генерации;
 - `regeneration_parent` — исходный вариант для Regenerate;
-- `generation_started=False` и `generation_completed=False` по умолчанию.
+- `generation_started=False` и `generation_completed=False` по умолчанию;
+- `catalog_items_displayed=False` — один успешный показ за этот запрос, независимо от `turn_operation_committed`.
 
 Этот объект передаётся инструментам через `runtime.context`. Модель не задаёт сервисы, URL, папку или runtime в своих аргументах.
 
-Контекст создаётся заново на каждый вызов `stream()`. Он не является долговременным состоянием диалога. При этом его флаги доступны Python-коду в течение всего текущего выполнения.
+Контекст создаётся заново на каждый вызов `stream_response_events()`. Он не является долговременным состоянием диалога. При этом его флаги доступны Python-коду в течение всего текущего выполнения.
 
 ### 7.3. `_get_agent()`: ленивое создание графа
 
 Внутри `try` вызывается `_get_agent()`.
 
-Если граф уже есть, метод возвращает его. Иначе импортируется `ASSISTANT_TOOLS` из [tools/__init__.py](../src/langchain_app/tools/__init__.py). Реестр содержит ровно четыре инструмента:
+Если граф уже есть, метод возвращает его. Иначе импортируется `ASSISTANT_TOOLS` из [tools/__init__.py](../src/langchain_app/tools/__init__.py). Реестр содержит пять инструментов:
 
 ```text
 generate_sequence
 search_catalog_items
+show_catalog_items
 get_catalog_tag_names
 replace_sequence_element
 ```
@@ -473,7 +448,7 @@ init_chat_model(
 - `SYSTEM_PROMPT` с правилами поведения;
 - `context_schema=AssistantToolContext`;
 - `state_schema=AssistantState`;
-- middleware `selected_sequence_context`, `invalidate_catalog_candidates`, `sequential_tool_calls`;
+- middleware `model_response_progress`, `selected_sequence_context`, `invalidate_catalog_candidates`, `tool_response_progress`, `sequential_tool_calls`;
 - созданный ранее checkpointer.
 
 Полученный скомпилированный граф сохраняется в `_agent`.
@@ -492,61 +467,40 @@ init_chat_model(
 
 Промпт также требует реальных данных каталога, английских поисковых условий и ответа на языке пользователя. Он разрешает замену только по явному запросу, требует уточнять неоднозначность и объяснять недоступность добавления, удаления, перемещения и ручного изменения mirroring.
 
+Показ каталога выбирается по смыслу запроса: «Покажи асаны сидя в наклоне», «Какие есть позы лежа», «Покажи ещё варианты» и «Найди кандидатов для замены, пока ничего не меняй» требуют поиска и `show_catalog_items`. Буквальное слово «покажи» и дополнительное подтверждение не нужны. Запрет изменения секвенции разрешает показ кандидатов, но запрещает генерацию и замену. Служебный поиск при генерации, замене, вопросе о технике и запрос тегов сами по себе не разрешают галерею. При отдельной просьбе показать каталог и выполнить операцию обе области выводятся раздельно; Generate и Regenerate исключают показ.
+
 Наличие текста в промпте задаёт желаемое поведение модели. Проверки положительного `count`, выбранного UUID, проверенного кандидата и числа изменений дополнительно реализованы в Python. Сам факт явного согласия пользователя на замену отдельным детерминированным классификатором здесь не проверяется.
 
 ### 7.5. Вход графа и `stream_events(version="v3")`
 
-`stream()` формирует вход:
+Вход содержит новое пользовательское сообщение и `turn_operation_committed=False`.
+История восстанавливается checkpointer по `thread_id`; UI-сообщения не копируются
+в граф. Regenerate дополнительно задаёт UUID родителя как активный.
 
 ```python
-{
-    "messages": [{"role": "user", "content": request}],
-    "turn_operation_committed": False,
-}
-```
-
-Передаётся только новое пользовательское сообщение. Предыдущая история восстанавливается графом по checkpointer и `thread_id`; UI-список `messages` сюда целиком не копируется.
-
-`turn_operation_committed` сбрасывается перед новым запросом. Он ограничивает изменения последовательности внутри одного запроса, а не на весь диалог.
-
-Для Regenerate во вход дополнительно записывается UUID родительского варианта как активный контекст этого запуска.
-
-Далее выполняется:
-
-```python
-from langgraph.stream import CustomTransformer, UpdatesTransformer
-
 stream = agent.stream_events(
-    inputs,
-    context=context,
-    config=self._config,
-    version="v3",
-    transformers=[CustomTransformer, UpdatesTransformer],
+    inputs, context=context, config=self._config,
+    version="v3", transformers=[CustomTransformer], durability="sync",
 )
-
-for event_type, data in stream.interleave("custom", "updates"):
-    if event_type == "custom":
-        yield data
-    elif event_type == "updates":
-        for update in data.values():
-            if update is None:
-                continue
-            for message in update.get("messages", []):
-                if isinstance(message, AIMessage) and not message.tool_calls and message.text:
-                    yield message.text
+for event_type, data in stream.interleave("custom", "values"):
+    events = progress.accept(data) if event_type == "custom" else progress.confirm_commits(data)
+    for event in events:
+        yield event
 ```
 
-`stream_events(..., version="v3")` возвращает объект запуска `GraphRunStream`. Выполнение графа продвигается при потреблении его потока. Параметр `stream_mode` здесь не передаётся: необходимые режимы определяются зарегистрированными трансформерами.
+`ResponseProgress` преобразует сигналы middleware в типизированные события с
+общим `request_id`, монотонным `event_index` и временем запроса. `values`
+подтверждает, что новый вариант уже применён к состоянию, прежде чем публиковать
+`sequence_committed` и успешное завершение соответствующего этапа. `durability="sync"`
+делает подтверждённый snapshot доступным через `get_state()`.
 
-`CustomTransformer` подключает проекцию `custom` с данными, которые инструмент отправил через `stream_writer`. `UpdatesTransformer` подключает проекцию `updates` с изменениями состояния после шагов графа. Эти проекции содержат события текущего графа; события вложенных графов доступны на их собственных объектах запуска.
+Публичный жизненный цикл начинается с `request_started` до инициализации модели
+и заканчивается `request_finished`. Финальный текст публикует model middleware,
+а не разбор свободного ответа в UI. Каталожный показ не является commit секвенции.
 
-`stream.interleave("custom", "updates")` объединяет обе проекции в порядке поступления и выдаёт пары `(event_type, data)`. Благодаря этому очередная асана передаётся интерфейсу до завершения генерации, а текст обрабатывается в том же цикле. При чтении сырых событий v3 непосредственно через `for event in stream` канал находился бы в `event["method"]`, а данные — в `event["params"]["data"]`; текущий код использует проекции через `interleave()`.
-
-Для `custom` метод выдаёт `data` наружу. В этом приложении генерация отправляет так `CatalogItemSchema`.
-
-Для `updates` метод перебирает сообщения обновления и выдаёт текст только у `AIMessage`, у которого нет `tool_calls` и есть непустой `message.text`. `ToolMessage` и сообщение модели с вызовом инструмента пользователю напрямую не показываются.
-
-Приложение потребляет только `custom` и `updates`, хотя v3 предоставляет и другие встроенные проекции, включая `messages`. Текст приходит по завершённым сообщениям модели из обновлений графа; миниатюры приходят постепенно по отдельным асанам.
+`stream()` остаётся адаптером, выдающим прежние типы: финальный текст и
+`CatalogItemSchema` из `sequence_element`. `generate()` выдаёт только эти асаны.
+Оба адаптера игнорируют `catalog_items_displayed` и сохраняют поведение исключений.
 
 ## 8. Первый вызов модели и middleware
 
@@ -576,7 +530,7 @@ Middleware оборачивает вызов модели. Он читает `ac
 
 ### 8.2. Модель возвращает ответ или вызов инструмента
 
-Если инструмент не нужен, модель возвращает текстовый `AIMessage`; он пойдёт через `updates` в интерфейс.
+Если инструмент не нужен, модель возвращает текстовый `AIMessage`; `model_response_progress` публикует его как `AssistantMessageEvent(purpose="final")`. Текст при tool call считается промежуточным и остаётся в блоке выполнения.
 
 Если нужно действие, модель возвращает `AIMessage.tool_calls` с именем и аргументами. Схему аргументов библиотека получает из `@tool` и аннотаций функций. `ToolRuntime` передаётся приложением и скрыт из схемы, которую заполняет модель.
 
@@ -632,7 +586,7 @@ runtime.state.get("turn_operation_committed", False)
 Инструмент начинает перебирать:
 
 ```python
-generator.generate(request, language="en", count=count)
+generator.generate(request, language="en", count=count, progress_observer=runtime.stream_writer)
 ```
 
 Здесь `request` — аргумент, сформированный моделью. Инструкции требуют сохранить в нём все предпочтения пользователя. Сам сервис не сверяет его семантически с исходным сообщением.
@@ -642,7 +596,7 @@ generator.generate(request, language="en", count=count)
 1. Добавляет глубокую копию в локальный список `items`.
 2. Вызывает `runtime.stream_writer(item)`.
 
-Вторая строка отправляет custom-событие сразу, до завершения всего инструмента. Первая сохраняет полные данные для будущего snapshot. Глубокая копия отделяет историю от возможных последующих изменений исходного объекта.
+Tool middleware перехватывает вторую строку и публикует `SequenceElementEvent` и счётчик этапа генерации. Через `progress_observer` внутренний поиск генератора получает дочерний этап. События поступают сразу, до завершения всего инструмента. Первая сохраняет полные данные для будущего snapshot. Глубокая копия отделяет историю от возможных последующих изменений исходного объекта.
 
 Пока цикл не закончен, инструмент ещё не возвращал `Command`, поэтому новый вариант не внесён в `state["sequences"]`.
 
@@ -927,7 +881,7 @@ GeneratedSequence.from_catalog_items(
 
 ### 13.2. `Command(update=...)`: точка сохранения варианта
 
-Последовательность сериализуется через `model_dump(mode="json")`, после чего выставляется `context.generation_completed=True`.
+Последовательность сериализуется через `model_dump(mode="json")`. `context.generation_completed=True` устанавливается после подтверждения commit по состоянию графа, а не до применения `Command`.
 
 Возвращается `Command` с обновлением:
 
@@ -952,71 +906,53 @@ GeneratedSequence.from_catalog_items(
 
 Модель также получает результат инструмента через историю сообщений. Она может написать ответ на языке пользователя; инструкции требуют сохранять имена асан и тегов как в каталоге.
 
-Текстовый `AIMessage` без вызовов инструментов проходит через обработчик `updates` в `AssistantAgent.stream()`. Вложенный `catalog_items()` добавляет его в `texts` и обновляет Markdown.
-
-Когда граф завершён, `stream()` проверяет `require_generation`. Если генерация была обязательной, но `generation_completed=False`, выбрасывается `AssistantAgentError`. Один текст «последовательность готова» не считается выполненной Generate.
+Текстовый `AIMessage` без вызовов инструментов публикуется как финальное событие.
+`render_response()` обновляет зарезервированный Markdown из принятого текста.
+Если генерация обязательна, завершение без подтверждённой генерации считается
+ошибкой. Один текст «последовательность готова» не выполняет Generate.
 
 ### 13.4. Как UI рисует промежуточные асаны
 
-Вернёмся в `_render_catalog_items()`, который ждал `first = next(...)`.
+`SequenceElementEvent` добавляет миниатюру в временный `SequenceView`, с порядком
+из события. Асаны без картинки в этом промежуточном пути пропускаются.
+Для `bilateral=true` сохраняются существующие mirror-скобки. Этот путь выводит
+только секвенцию и никогда не создаёт `catalog_items`.
 
-Получив первую асану, он вызывает `self.render()` с временным представлением:
+### 13.5. Подтверждённый результат независимо от текста
 
-- `info` из `create_sequence_view(language)`;
-- `thumbnails` из `generate_thumbnails_one_by_one(chain([first], catalog_items))`.
-
-`create_sequence_view()` задаёт временный UUID, имя New Sequence, ID 0 и количество 0. Этот UUID не является UUID окончательно сохранённого варианта.
-
-`chain()` возвращает первую уже полученную асану в общий поток, затем продолжает исходный итератор. Поэтому первая поза не теряется после `next()` и не дублируется.
-
-`generate_thumbnails_one_by_one()` для каждой асаны с изображением выдаёт UUID каталога, последовательный номер, URL, имя и mirror-флаги из bilateral. Асаны без изображения в этом временном потоке пропускаются.
-
-`render()` → `_render_images()` потребляет этот итератор. Запрос следующей миниатюры продолжает выполнение графа и генератора. Когда приходит текст вместо асаны, вложенный `catalog_items()` выводит текст и продолжает искать следующую асану или конец потока.
-
-### 13.5. Получение окончательного результата независимо от текста
-
-После потребления итератора `_render_catalog_items()` снова читает `assistant.active_sequence_uuid`.
-
-- Если UUID отсутствует или совпадает с `previous_uuid`, нового сохранённого варианта нет: возвращается `None`.
-- Если UUID новый, метод получает полный вариант через `get_sequence()` и возвращает `generated_sequence_view(snapshot)`.
-
-Он не собирает окончательную последовательность из нарисованных картинок. Источник результата — сохранённый snapshot, включая правильный UUID, количество и все данные элементов.
-
-Этот же путь работает для замены: инструмент замены не отправляет custom-асаны. Итератор может завершиться без `first`, но новый активный UUID всё равно обнаружится и даст новую карточку.
+На `SequenceCommittedEvent` UI получает вариант через `assistant.get_sequence()`
+и строит `generated_sequence_view()`. Полный snapshot содержит корректные UUID,
+все элементы и mirror-флаги; отсутствующие изображения получают fallback-имя.
+Замена использует этот же commit-путь без повторной выдачи отдельных поз.
 
 ### 13.6. Конец `render_response()`
 
-Метод получает UUID новой последовательности, если она есть, и вызывает `assistant.get_sequence_variants(uuid)`.
-
-Внутри `get_sequence_variants()` определяется семейство исходного варианта и выбираются все snapshots с таким же `family_uuid`, в порядке их добавления в словарь. Каждый восстанавливается через `from_snapshot()`.
-
-Из них строятся UI-проекции и индекс нового варианта. Возвращаемый `ChatMessage` содержит:
+Из `get_sequence_variants()` строятся проекции семейства и выбранный индекс.
+Возвращаемый `ChatMessage` содержит:
 
 ```text
-role, content
+role, content, execution
+catalog_items (только после успешного показа)
 sequence, sequence_uuid
 sequence_variant_uuids, sequence_variants, selected_sequence_index
 sequence_request
 ```
 
-`sequence_request` берётся из `generation_request` выбранного полного варианта; если последовательности нет — используется текущий запрос.
+`sequence_request` берётся из `generation_request` выбранного варианта либо
+из текущего запроса. `catalog_items` хранит отдельный снимок именно выбранных
+элементов каталога; он не зависит от последующих поисков или выбора варианта.
 
 ### 13.7. Возврат в `assistant.py` и `st.rerun()`
 
-В точке входа ответ добавляется в UI-историю, если:
+Новый ответ сохраняется всегда, включая ошибку и пустой текст. Regenerate
+обновляет существующую карточку и сохраняет предыдущий `ExecutionSnapshot` в
+`execution_history`. В `finally` освобождаются контролы, затем выполняется rerun.
+Подборка из сообщения воспроизводится без модели и каталога. Новая операция
+не запускается, пока пользователь снова не отправит запрос или Regenerate.
 
-1. В ответе есть последовательность; либо
-2. Есть непустой текст и запрос пришёл из чата, а не от Generate.
+## 14. Ветка поиска, тегов и показа каталога
 
-Поэтому обычный текстовый ответ сохраняется без карточки. Для Generate текст без результата не добавляется как успешный ответ; пользовательское сообщение уже было добавлено ранее.
-
-После успешной Generate в `sequence-prompt-prefill` сохраняется сформированный текст. Затем выполняется `st.rerun()`.
-
-Повторный проход заново строит страницу, показывает сохранённые сообщения и полноценную карточку с вариантами и Save. Сам по себе этот rerun не генерирует последовательность ещё раз: новое действие запускается только при новом запросе или кнопке Regenerate.
-
-## 14. Ветка поиска и получения тегов
-
-Эта ветка начинается в том же `AssistantAgent.stream()`, но модель выбирает инструменты из [tools/catalog.py](../src/langchain_app/tools/catalog.py).
+Эта ветка начинается в том же `AssistantAgent.stream_response_events()`, но модель выбирает инструменты из [tools/catalog.py](../src/langchain_app/tools/catalog.py).
 
 ### 14.1. `get_catalog_tag_names()` → `CatalogTagService.get_names()`
 
@@ -1069,13 +1005,61 @@ GET /api/public/catalog_folders/<folder_uuid>/catalog_tags?language=en
 
 Вместе с предварительным `invalidate_catalog_candidates()` это означает: новый поиск заменяет старый набор целиком. Неуспешный новый поиск не оставляет старые асаны пригодными для последующей замены.
 
-### 14.4. Возврат пользователю без новой карточки
+### 14.4. Поиск без показа
 
-Граф может пройти цепочку «теги → модель → поиск → модель → текст» в рамках одного запроса. Генератор последовательностей при этом не вызывается.
+Цепочка «теги → поиск → текст» не вызывает генератор и не создаёт галерею.
+Middleware публикует обычные этапы и публичные результаты поиска. Проверенные
+кандидаты остаются в `latest_catalog_items` до следующего поиска и могут
+использоваться для последующей замены либо отдельного показа. Новый поиск
+заменяет этот набор, но не меняет уже показанные подборки в сообщениях.
 
-`ToolMessage` остаются в истории модели, а пользователю `AssistantAgent.stream()` выдаёт итоговый текст. Активный UUID не изменился, поэтому `_render_catalog_items()` возвращает `None`. В `assistant.py` сохраняется обычное текстовое сообщение.
+### 14.5. `show_catalog_items(catalog_item_ids)`
 
-Найденные кандидаты остаются в состоянии графа. В следующем сообщении пользователь может выбрать один из них для замены без обязательного повторения того же поиска. Проверка означает «присутствует в последнем сохранённом наборе поиска», а не повторный HTTP-запрос к каталогу непосредственно перед заменой.
+Инструмент принимает только непустой список положительных строгих целых ID.
+Модель не передаёт имена, URL или mirror-флаги. Порядок аргументов задаёт порядок
+галереи. Дубликаты, неизвестные ID и неверные данные отклоняются без события.
+
+Tool восстанавливает `CatalogItemSchema` из `latest_catalog_items`, выбирает
+нужные элементы и помещает отделённые JSON-снимки в `ToolMessage.artifact["items"]`.
+Модели возвращаются `status="ok"`, `displayed_count` и выбранные ID. Флаг
+`context.catalog_items_displayed=True` ограничивает успешный показ одним за
+запрос; новый пользовательский запрос получает новый контекст.
+
+Показ не меняет кандидатов, `sequences`, активный UUID и `turn_operation_committed`.
+При `require_generation` или наличии родителя Regenerate инструмент возвращает
+`generation_required`. Повторный показ возвращает `catalog_items_already_displayed`.
+Пустой или неуспешный новый поиск очищает кандидатов, поэтому показать старые
+ID после него нельзя. Отдельного endpoint, накопления истории поисков и
+извлечения имён из свободного текста здесь нет.
+
+### 14.6. Публикация события и живая галерея
+
+`tool_response_progress` открывает этап `showing_catalog_items` с заголовком
+Showing catalog items... и `tool_call_id`. Только после успешного результата
+инструмента middleware проверяет его artifact и публикует
+`CatalogItemsDisplayedEvent(type="catalog_items_displayed")`:
+
+| Поле | Содержание |
+| --- | --- |
+| `request_id`, `event_index`, `elapsed_seconds` | Запрос, порядок и время |
+| `step_id`, `tool_call_id` | Этап и вызов `show_catalog_items` |
+| `items` | Непустой проверенный список `CatalogItemSchema` в выбранном порядке |
+
+Событие выходит до `step_finished(ok)` с кратким числом показанных элементов.
+`search_catalog_items`, получение тегов и внутренний поиск генератора никогда
+не публикуют это событие. При ошибке аргументов завершается только этап инструмента;
+модель может исправить вызов или объяснить ошибку.
+
+UI пропускает событие через существующий фильтр и копирует элементы в сообщение.
+`CatalogItemsRenderer` проецирует только URL и настоящее имя и вызывает общий
+`ThumbnailRenderer`. Каталог расположен после текста, вне блока выполнения,
+без кнопок, ID, метаданных, счётчика и mirror-скобок, включая bilateral-асаны.
+CSS подключается единственным `SequenceRenderer.render_styles()` в точке входа;
+размер, скругление, `cover`, интервалы и перенос секвенции и каталога общие.
+URL и alt экранируются; при `image_url=None` выводится существующий fallback-имя.
+
+Если следующая модель упала, уже подтверждённые тамбы остаются рядом с ошибкой
+и после rerun. Успешный поиск без действия показа такого снимка не сохраняет.
 
 ## 15. Ветка замены одной позы
 
@@ -1156,9 +1140,9 @@ ID вхождений сохраняются у всех элементов, в�
 
 ### 15.6. Возврат в UI и дальнейшие запросы
 
-После инструмента middleware передаёт модели новый выбранный вариант. Финальный текст идёт обычным путём `updates`.
+После инструмента middleware передаёт модели новый выбранный вариант. Финальный текст идёт как `AssistantMessageEvent(purpose="final")`.
 
-Замена не использует `stream_writer()`: не требуется заново выдавать каждую позу. `_render_catalog_items()` обнаруживает новый UUID после окончания итератора и строит карточку из сохранённого snapshot.
+Замена не выдаёт каждую позу заново. После подтверждения состояния публикуется `SequenceCommittedEvent`; UI строит карточку из сохранённого snapshot. Служебный поиск кандидатов не создаёт каталожную галерею. Она возможна только при отдельном запросе пользователя и успешном `show_catalog_items`.
 
 `render_response()` включает в новую карточку известные ассистенту варианты того же семейства. Предыдущие snapshots и сообщения остаются в истории.
 
@@ -1205,39 +1189,25 @@ self._get_agent().update_state(
 
 ### 16.4. Нажатие Regenerate
 
-Кнопка отключена, если невозможно восстановить исходный запрос.
+Кнопка отключена во время другого запроса или если исходный запрос недоступен.
+Callback `enqueue_regeneration()` ставит `PendingResponse` с `require_generation=True`,
+UUID источника и индексом сообщения. Основной цикл точки входа использует тот же
+`render_response()` и поток событий, что чат и Generate. Отдельного старого
+`render_generated_sequence()` больше нет.
 
-При нажатии вызывается:
-
-```python
-self.render_generated_sequence(
-    request,
-    key=f"{key}-live",
-    sequence_uuid=selected_uuid if assistant is not None else None,
-)
-```
-
-`render_generated_sequence()` получает ассистента через фабрику и передаёт в `_render_catalog_items()` итератор `assistant.generate(...)`.
+Успешная попытка обновляет выбранную карточку. Неуспешная сохраняет прежний
+вариант и публичную историю попытки. Regenerate не создаёт и не очищает
+`catalog_items` уже существующего сообщения.
 
 ### 16.5. `AssistantAgent.generate()` как адаптер
 
-Метод оставляет прежний интерфейс генерации:
-
-```python
-for chunk in self.stream(
-    request,
-    require_generation=True,
-    regenerate_sequence_uuid=sequence_uuid,
-):
-    if isinstance(chunk, CatalogItemSchema):
-        yield chunk
-```
-
-Он использует тот же агент, но наружу передаёт только асаны. Итоговый текст модели остаётся в истории графа, а UI-путь Regenerate не добавляет его как новое сообщение чата.
-
-Аргумент `language` этого адаптера сохранён для совместимости; он не меняет английский язык каталога.
-
-При наличии исходного UUID `stream()` загружает родителя, использует его `generation_request` и задаёт его активным на время запуска. Новый dropdown в верхней форме не меняет исходный запрос Regenerate.
+`generate()` остаётся совместимым API: потребляет `stream()` с обязательной
+генерацией и выдаёт только `CatalogItemSchema`. `stream()` преобразует
+`stream_response_events()` в прежние объекты асан и финальный текст.
+Каталожный показ эти адаптеры не выдают. Основной UI использует события напрямую.
+Аргумент `language` сохранён для совместимости; каталог остаётся английским.
+При UUID источника используются его `generation_request` и семейство, независимо
+от нового dropdown. В контексте Generate / Regenerate `show_catalog_items` запрещён.
 
 ### 16.6. Успех и ошибка Regenerate
 
@@ -1247,7 +1217,7 @@ for chunk in self.stream(
 
 UI-карточки хранят свои списки UUID. Восстановление карточки перечитывает snapshots именно по этому списку; оно не добавляет автоматически все будущие варианты семейства в каждую старую карточку. Все полные варианты при этом хранятся в графе, а новая карточка ответа получает семейство через `get_sequence_variants()`.
 
-Если генерация прервалась до завершения, новый вариант не добавляется. `stream()` восстанавливает `active_before`, если временно переключал активный контекст на родителя Regenerate. Это важно при неудачной регенерации старой карточки, когда до нажатия был выбран другой вариант.
+Если генерация прервалась до завершения, новый вариант не добавляется. `stream_response_events()` восстанавливает `active_before`, если временно переключал активный контекст на родителя Regenerate. Это важно при неудачной регенерации старой карточки, когда до нажатия был выбран другой вариант.
 
 Для legacy-карточки без полного snapshot передаётся `sequence_uuid=None`. Генерация может использовать восстановленный текст запроса, но у неё нет сохранённого родителя для привязки к старому семейству.
 
@@ -1344,7 +1314,7 @@ JSON последовательности не помещается в query str
 | `messages` | История user/AI/tool-сообщений, унаследованная от `AgentState` |
 | `sequences` | Словарь полных вариантов по UUID; объединяется `merge_sequences()` |
 | `active_sequence_uuid` | Единственный текущий выбранный вариант либо `None` |
-| `latest_catalog_items` | Кандидаты из последнего поиска для проверяемой замены |
+| `latest_catalog_items` | Кандидаты из последнего поиска для проверяемой замены и явного показа |
 | `turn_operation_committed` | Признак успешного изменения последовательности в текущем запросе |
 
 `AssistantInputState` разрешает на входе `active_sequence_uuid` и `turn_operation_committed`, помимо библиотечных полей. Это позволяет запуску явно сбросить флаг операции и временно выбрать родителя Regenerate.
@@ -1379,7 +1349,9 @@ JSON последовательности не помещается в query str
 | `CatalogItemsSearchArguments` | Проверенные параметры HTTP-поиска |
 | `GeneratedSequenceElement` | Вхождение асаны, порядок и mirror-флаги |
 | `GeneratedSequence` | Завершённый вариант, семейство, происхождение и элементы |
-| `ChatMessage` | Типизированный словарь видимого сообщения и карточек; не Pydantic-валидация |
+| `ChatMessage` | Типизированный словарь текста, `execution`, необязательного `catalog_items` и карточек секвенции |
+| `CatalogItemsDisplayedEvent` | Подтверждённый снимок выбранных элементов, связанный с этапом показа |
+| `ExecutionSnapshot` | Публичная история этапов и исход запроса для rerun |
 | `SequenceInfo`, `AsanaThumbnail`, `SequenceView` | Типизированные словари для отображения и импорта |
 
 `model_dump(mode="json")` приводит UUID и URL к JSON-совместимым значениям. Восстановление через `model_validate()` снова проверяет данные схемой.
@@ -1396,7 +1368,7 @@ JSON последовательности не помещается в query str
 
 ### 19.2. Исключение во время исполнения графа
 
-Общий `except Exception` в `AssistantAgent.stream()` сначала вызывает `_complete_failed_tool_calls()`.
+Общий `except Exception` в `AssistantAgent.stream_response_events()` сначала подтверждает применённые commits из состояния графа, затем вызывает `_complete_failed_tool_calls()`.
 
 Метод читает сохранённую историю в обратном порядке, собирает ID уже отвеченных `ToolMessage` и находит последнее `AIMessage`. Для его вызовов без ответа создаются ошибочные сообщения:
 
@@ -1412,24 +1384,19 @@ JSON последовательности не помещается в query str
 
 После этого при неудачном Regenerate, если генерация не завершена, восстанавливается прежний активный UUID.
 
-`OpenAIError` и `GraphRecursionError` оборачиваются в `AssistantAgentError("Language model request failed: ...")`. Остальные исключения пробрасываются дальше без этого преобразования.
+После этого публикуется `request_finished(error)` с публичной ошибкой. `OpenAIError` и `GraphRecursionError` оборачиваются в `AssistantAgentError("Language model request failed: ...")`. Остальные исключения пробрасываются дальше без этого преобразования.
 
 ### 19.3. Что перехватывает рендерер
 
-В `_render_catalog_items()` потребление потока обёрнуто в перехват:
+`render_response()` ловит `Exception` вокруг создания зависимостей и потребления
+событий. Если producer не успел завершить поток, `ResponseExecution.fail()`
+создаёт терминальный результат и закрывает незавершённые этапы. `progress.finish()`
+выводит публичную ошибку без приватного текста исключения.
 
-```text
-CatalogItemServiceError
-TypeSafeServiceError
-AssistantAgentError
-ValueError
-```
-
-При них выводится `st.error("Could not update sequence: ...")`. `CatalogItemServiceError` здесь — совместимый alias базовой `CatalogServiceError`, а `TypeSafeSelectionError` наследуется от `TypeSafeServiceError`.
-
-После сообщения об ошибке метод всё равно проверяет активный UUID и пытается получить завершённый snapshot. Поэтому ошибка финального текста не уничтожает уже сохранённый результат инструмента.
-
-Эта обработка не является всеобщей: например, получение фабрики в `render_response()` происходит до входа в `_render_catalog_items()`, а произвольный `RuntimeError` не входит в его список. Необработанные ошибки могут выйти к стандартному отображению исключений Streamlit.
+Временные позы без commit удаляются; завершённая секвенция и уже подтверждённая
+каталожная подборка сохраняются в `ChatMessage` вместе с `execution` даже при
+пустом тексте. Галерея не появляется из одного успешного поиска. Rerun показывает
+сохранённую ошибку и снимки без повторного запроса к внешним сервисам.
 
 ### 19.4. Разница между частичным прогрессом и завершённой операцией
 
@@ -1440,6 +1407,8 @@ ValueError
 | После применения `Command` генерации, во время финального ответа модели | Завершённый новый вариант остаётся и может быть добавлен в UI-историю |
 | Во время проверки замены | Исходный вариант сохраняется без изменений |
 | После применения `Command` замены, во время финального ответа модели | Новый вариант замены остаётся доступен |
+| После успешного поиска, до show_catalog_items | Галереи и catalog_items нет |
+| После успешного show_catalog_items, во время финального текста | Проверенная подборка остаётся в сообщении вместе с ошибкой |
 | Во время Save | Локальный вариант остаётся в памяти; результат внешнего сохранения отображается компонентом |
 
 Сохранение snapshot здесь означает запись состояния графа в память, а не транзакцию базы данных и не запись в Asana Catalog.
@@ -1525,7 +1494,10 @@ get_sequence_view()
 | [services/sequence_context.py](../src/langchain_app/services/sequence_context.py) | Актуальный snapshot перед моделью, очистка кандидатов и последовательность инструментов |
 | [tools/context.py](../src/langchain_app/tools/context.py) | Зависимости одного запуска и формат ошибок инструмента |
 | [tools/sequence.py](../src/langchain_app/tools/sequence.py) | Инструменты генерации и замены, обновления графа |
-| [tools/catalog.py](../src/langchain_app/tools/catalog.py) | Инструменты поиска асан и получения тегов |
+| [tools/catalog.py](../src/langchain_app/tools/catalog.py) | Инструменты поиска, тегов и явного показа каталога |
+| [ui/catalog_items.py](../src/langchain_app/ui/catalog_items.py) | Проекция подтверждённой подборки каталога |
+| [ui/thumbnails.py](../src/langchain_app/ui/thumbnails.py) | Единственные стили, безопасная разметка и перенос миниатюр |
+| [services/response_progress_middleware.py](../src/langchain_app/services/response_progress_middleware.py) | Этапы модели/инструментов и catalog_items_displayed |
 | [services/sequence_generator.py](../src/langchain_app/services/sequence_generator.py) | Выбор стартовой позы, пакеты кандидатов и завершение |
 | [services/type_safe.py](../src/langchain_app/services/type_safe.py) | Закрытая задача выбора следующей асаны для Jev |
 | [services/catalog_client.py](../src/langchain_app/services/catalog_client.py) | HTTP, английский язык и ошибки статусов |
@@ -1541,6 +1513,8 @@ get_sequence_view()
 | [services/sequence.py](../src/langchain_app/services/sequence.py), [schemas/sequence.py](../src/langchain_app/schemas/sequence.py) | Дополнительный путь чтения готовых публичных последовательностей |
 
 ## 21. Проверки поведения и внешняя документация
+
+Приёмка показа каталога описана в [фиче 003](specs/003-catalog-items-display/acceptance.md). `test_catalog_display_ui.py` проверяет реальные tools и события со сценарной моделью, живой показ до финального текста, snapshots после ошибки, фильтры событий, rerun без API, кандидатов без изменения, отдельные области показа и замены, отсутствие галереи в обычной генерации/замене. Браузерная fixture [catalog_display_browser.py](../tests/fixtures/catalog_display_browser.py) использует только тестовую модель и mock каталога: 50 элементов, fallback без изображения, общие стили и узкая ширина.
 
 Для сопоставления описания с исполняемыми сценариями в репозитории есть следующие тесты:
 

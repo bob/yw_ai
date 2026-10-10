@@ -149,13 +149,14 @@ class AssistantAgentTests(unittest.TestCase):
             list(service.generate("practice", language="en"))
         factory.assert_not_called()
 
-    def test_all_four_tools_are_registered_with_hidden_application_configuration(self):
+    def test_all_tools_are_registered_with_hidden_application_configuration(self):
         model = ToolCallingModel(responses=[AIMessage(content="Какую практику вы хотите?")])
         factory = Mock()
         service = assistant(factory, model=model)
         self.assertEqual(list(service.stream("Помоги выбрать практику")), ["Какую практику вы хотите?"])
         self.assertEqual(set(model.tool_names), {
             "generate_sequence", "search_catalog_items", "get_catalog_tag_names", "replace_sequence_element",
+            "show_catalog_items",
         })
         for registered_tool in ASSISTANT_TOOLS:
             self.assertFalse(registered_tool.return_direct)

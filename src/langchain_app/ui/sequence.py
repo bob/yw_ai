@@ -2,7 +2,6 @@
 
 import time
 from collections.abc import Callable, Iterable, Iterator
-from html import escape
 from time import monotonic
 from typing import TypedDict
 from uuid import uuid4
@@ -19,22 +18,19 @@ from langchain_app.services import (
     AssistantAgent,
     SequenceService,
 )
-from langchain_app.schemas.response_progress import SequenceCommittedEvent, SequenceElementEvent
+from langchain_app.schemas.response_progress import (
+    CatalogItemsDisplayedEvent, SequenceCommittedEvent, SequenceElementEvent,
+)
+from langchain_app.ui.catalog_items import CatalogItemsRenderer
 from langchain_app.ui.response_progress import (
     PendingResponse, ResponseProgressRenderer, enqueue_regeneration, render_execution,
 )
 from langchain_app.ui.sequence_import import render_sequence_import
+from langchain_app.ui.thumbnails import (
+    DEFAULT_THUMBNAIL_SIZE, AsanaThumbnail, ThumbnailRenderer,
+)
 
 THUMBNAIL_STREAM_DELAY_SECONDS = 0.05
-
-
-class AsanaThumbnail(TypedDict):
-    uuid: str | None
-    order: int
-    image_url: str
-    alt: str
-    start_mirror: bool
-    end_mirror: bool
 
 
 class SequenceInfo(TypedDict):
@@ -156,12 +152,13 @@ class SequenceRenderer:
     def __init__(
         self,
         *,
-        thumbnail_size: int = 64,
+        thumbnail_size: int = DEFAULT_THUMBNAIL_SIZE,
         generator_factory: Callable[[], AssistantAgent] | None = None,
         language: Language = "en",
         catalog_url: str | None = None,
     ) -> None:
-        self._thumbnail_size = thumbnail_size
+        self._thumbnails = ThumbnailRenderer(thumbnail_size=thumbnail_size)
+        self._catalog_items = CatalogItemsRenderer(thumbnail_size=thumbnail_size)
         self._generator_factory = generator_factory
         self._language: Language = language
         self._catalog_url = catalog_url
@@ -176,6 +173,8 @@ class SequenceRenderer:
                     render_execution(snapshot)
                 if message["content"]:
                     st.markdown(message["content"])
+                if items := message.get("catalog_items"):
+                    self._catalog_items.render(items, key=f"assistant-catalog-{message_index}")
                 self._render_message_sequence(messages, message_index, disabled=disabled)
 
     def _render_message_sequence(
@@ -281,10 +280,12 @@ class SequenceRenderer:
         pending = pending or PendingResponse(request, require_generation=require_generation)
         assistant = None
         sequence = None
+        catalog_items = None
         snapshots = []
         with st.chat_message("assistant"):
             progress = ResponseProgressRenderer(pending.request_id, pending.accepted_at, pending.sequence_uuid)
             text_output = st.empty()
+            catalog_output = st.empty()
             sequence_output = st.empty()
             if content:
                 text_output.markdown(content)
@@ -305,7 +306,11 @@ class SequenceRenderer:
                     text = content + "".join(progress.execution.final_texts)
                     if text:
                         text_output.markdown(text)
-                    if isinstance(event, SequenceElementEvent):
+                    if isinstance(event, CatalogItemsDisplayedEvent) and catalog_items is None:
+                        catalog_items = [item.model_copy(deep=True) for item in event.items]
+                        with catalog_output.container():
+                            self._catalog_items.render(catalog_items, key=f"{key}-catalog")
+                    elif isinstance(event, SequenceElementEvent):
                         for thumbnail in generate_thumbnails_one_by_one([event.catalog_item]):
                             thumbnail["order"] = event.order
                             thumbnails.append(thumbnail)
@@ -330,7 +335,7 @@ class SequenceRenderer:
         sequence_uuid = sequence["info"]["uuid"] if sequence is not None else None
         variants = [generated_sequence_view(snapshot) for snapshot in snapshots]
         selected = next((index for index, snapshot in enumerate(snapshots) if str(snapshot.uuid) == sequence_uuid), 0)
-        return {
+        message: ChatMessage = {
             "role": "assistant",
             "content": content + "".join(progress.execution.final_texts),
             "execution": execution,
@@ -341,53 +346,13 @@ class SequenceRenderer:
             "sequence_variants": variants,
             "selected_sequence_index": selected,
         }
+        if catalog_items is not None:
+            message["catalog_items"] = catalog_items
+        return message
 
     def render_styles(self) -> None:
-        """Add the styles used by all sequence thumbnails on the page."""
-
-        st.html(
-            f"""
-            <style>
-            .mirror-thumbnail {{
-                --thumbnail-size: {self._thumbnail_size}px;
-                --bracket-color: green;
-                --bracket-stroke: 2px;
-
-                position: relative;
-                display: block;
-                width: var(--thumbnail-size);
-                height: var(--thumbnail-size);
-            }}
-            .mirror-thumbnail img {{
-                display: block;
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                border-radius: 10px;
-            }}
-            .mirror-thumbnail__bracket {{
-                position: absolute;
-                top: 6px;
-                bottom: 6px;
-                width: 8px;
-                border-top: var(--bracket-stroke) solid var(--bracket-color);
-                border-bottom: var(--bracket-stroke) solid var(--bracket-color);
-                pointer-events: none;
-            }}
-            .mirror-thumbnail__bracket--start {{
-                left: 4px;
-                border-left: var(--bracket-stroke) solid var(--bracket-color);
-            }}
-            .mirror-thumbnail__bracket--end {{
-                right: 4px;
-                border-right: var(--bracket-stroke) solid var(--bracket-color);
-            }}
-            [class*="stElementToolbar"] {{
-                visibility: hidden;
-            }}
-            </style>
-            """
-        )
+        """Add shared thumbnail styles once at the page entry point."""
+        self._thumbnails.render_styles()
 
     def render(
         self,
@@ -422,25 +387,7 @@ class SequenceRenderer:
 
     @staticmethod
     def _thumbnail_html(thumbnail: AsanaThumbnail) -> str:
-        brackets = ""
-        if thumbnail["start_mirror"]:
-            brackets += (
-                '<span class="mirror-thumbnail__bracket '
-                'mirror-thumbnail__bracket--start" aria-hidden="true"></span>'
-            )
-        if thumbnail["end_mirror"]:
-            brackets += (
-                '<span class="mirror-thumbnail__bracket '
-                'mirror-thumbnail__bracket--end" aria-hidden="true"></span>'
-            )
-
-        return (
-            '<div class="mirror-thumbnail">'
-            f'<img src="{escape(thumbnail["image_url"], quote=True)}" '
-            f'alt="{escape(thumbnail["alt"], quote=True)}">'
-            f"{brackets}"
-            "</div>"
-        )
+        return ThumbnailRenderer._thumbnail_html(thumbnail)
 
     def _render_images(
         self,
@@ -448,9 +395,4 @@ class SequenceRenderer:
         *,
         key: str,
     ) -> None:
-        with st.container(key=key, horizontal=True, wrap=True, gap="xxsmall"):
-            for thumbnail in thumbnails:
-                if thumbnail["image_url"]:
-                    st.html(self._thumbnail_html(thumbnail), width="content")
-                else:
-                    st.caption(thumbnail["alt"], width="content")
+        self._thumbnails.render(thumbnails, key=key)

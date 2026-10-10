@@ -9,7 +9,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import TypeAdapter
 
-from langchain_app.schemas import ResponseEvent
+from langchain_app.schemas import CatalogItemSchema, CatalogItemsDisplayedEvent, ResponseEvent
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
 from langchain_app.services.sequence_generator import SequenceGenerator
@@ -53,7 +53,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
             elif event.type == "step_finished":
                 self.assertIn(event.step_id, active)
                 active.remove(event.step_id)
-            elif event.type in ("step_progress", "sequence_element", "sequence_committed"):
+            elif event.type in ("step_progress", "sequence_element", "sequence_committed", "catalog_items_displayed"):
                 self.assertIn(event.step_id, active)
         self.assertFalse(active)
         adapter = TypeAdapter(list[ResponseEvent])
@@ -124,6 +124,183 @@ class ResponseProgressStreamTests(unittest.TestCase):
                 self.assertEqual(finish.outcome, "ok")
                 self.assertIn("0 catalog items" if name == "search_catalog_items" else "2 catalog tags", finish.summary)
                 self.assertIsNotNone(step.tool_call_id)
+                self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
+
+    def test_display_publishes_only_chosen_items_inside_its_step_before_followup_reply(self):
+        allow_reply = self.gate()
+        selected = [pose(2), pose(3), pose(4)]
+        selected[0].image_url = None
+        selected[1].bilateral = True
+        selected[1].catalog_tag_names = ["Seated"]
+        catalog = Mock()
+        catalog.search.side_effect = [[pose(1)], selected]
+        model = ToolCallingModel(responses=[
+            tool_call("search_catalog_items", name="First"),
+            tool_call("search_catalog_items", name="Second"),
+            tool_call("show_catalog_items", catalog_item_ids=[3, 2]), AIMessage(content="Here are the options."),
+        ])
+        original = ToolCallingModel._generate
+
+        def followup(model_instance, messages, **kwargs):
+            if isinstance(messages[-1], ToolMessage) and messages[-1].artifact is not None:
+                self.wait(allow_reply)
+            return original(model_instance, messages, **kwargs)
+
+        factory = Mock()
+        service = assistant(factory, model=model, catalog_item_service=catalog)
+        events = []
+        with patch.object(ToolCallingModel, "_generate", new=followup):
+            for event in service.stream_response_events("Show options"):
+                events.append(event)
+                if isinstance(event, CatalogItemsDisplayedEvent):
+                    self.assertFalse(any(e.type == "assistant_message" and e.purpose == "final" for e in events))
+                    self.assertFalse(any(e.type == "step_finished" and e.step_id == event.step_id for e in events))
+                    allow_reply.set()
+        self.assert_lifecycle(events)
+        displayed, = [e for e in events if isinstance(e, CatalogItemsDisplayedEvent)]
+        self.assertEqual(displayed.items, [selected[1], selected[0]])
+        step = next(e for e in events if e.type == "step_started" and e.step_id == displayed.step_id)
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == displayed.step_id)
+        self.assertEqual((step.code, step.title), ("showing_catalog_items", "Showing catalog items..."))
+        self.assertEqual(displayed.tool_call_id, step.tool_call_id)
+        self.assertEqual(displayed.tool_call_id, finish.tool_call_id)
+        self.assertLess(step.event_index, displayed.event_index)
+        self.assertLess(displayed.event_index, finish.event_index)
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Displayed 2 catalog items."))
+        self.assertFalse(any(e.type in ("sequence_element", "sequence_committed") for e in events))
+        self.assertFalse(service.state["turn_operation_committed"])
+        self.assertIsNone(service.active_sequence_uuid)
+        self.assertEqual(service.state["latest_catalog_items"], [item.model_dump(mode="json") for item in selected])
+        displayed.items[0].name = "Changed"
+        displayed.items[0].catalog_tag_names.append("Changed")
+        self.assertEqual(service.state["latest_catalog_items"][1]["name"], "Pose 3")
+        result = next(m for m in service.state["messages"] if isinstance(m, ToolMessage) and m.artifact is not None)
+        self.assertEqual(result.artifact["items"][0]["catalog_tag_names"], ["Seated"])
+        factory.assert_not_called()
+
+    def test_invalid_display_and_repeated_display_emit_no_snapshot_and_finish_with_error(self):
+        for ids in ([], [0], [True], ["1"], [1, 1], [1, 99]):
+            with self.subTest(ids=ids):
+                catalog = Mock()
+                catalog.search.return_value = [pose(1)]
+                model = ToolCallingModel(responses=[
+                    tool_call("search_catalog_items"), tool_call("show_catalog_items", catalog_item_ids=ids),
+                    tool_call("show_catalog_items", catalog_item_ids=[1]),
+                    tool_call("show_catalog_items", catalog_item_ids=[1]), AIMessage(content="Shown."),
+                ])
+                events = list(assistant(Mock(), model=model, catalog_item_service=catalog).stream_response_events("Show options"))
+                self.assert_lifecycle(events)
+                displays = [e for e in events if e.type == "step_started" and e.code == "showing_catalog_items"]
+                self.assertEqual(len(displays), 3)
+                finishes = [next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+                            for step in displays]
+                self.assertEqual([e.outcome for e in finishes], ["error", "ok", "error"])
+                displayed, = [e for e in events if e.type == "catalog_items_displayed"]
+                self.assertEqual(displayed.step_id, displays[1].step_id)
+                self.assertEqual([item.id for item in displayed.items], [1])
+
+    def test_empty_or_failed_search_cannot_publish_display(self):
+        for failed in (False, True):
+            with self.subTest(failed=failed):
+                catalog = Mock()
+                catalog.search.return_value = []
+                if failed:
+                    catalog.search.side_effect = CatalogItemApiError("secret API details")
+                model = ToolCallingModel(responses=[
+                    tool_call("search_catalog_items"), tool_call("show_catalog_items", catalog_item_ids=[1]),
+                    AIMessage(content="No options found."),
+                ])
+                service = assistant(Mock(), model=model, catalog_item_service=catalog)
+                events = list(service.stream_response_events("Show options"))
+                self.assert_lifecycle(events)
+                self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
+                show = next(e for e in events if e.type == "step_started" and e.code == "showing_catalog_items")
+                finish = next(e for e in events if e.type == "step_finished" and e.step_id == show.step_id)
+                self.assertEqual(finish.outcome, "error")
+                self.assertEqual(service.state["latest_catalog_items"], [])
+                self.assertNotIn("secret API details", str(events))
+
+    def test_model_failure_before_or_after_display_preserves_only_successful_display(self):
+        for show in (False, True):
+            with self.subTest(show=show):
+                catalog = Mock()
+                catalog.search.return_value = [pose(1)]
+                calls = [tool_call("search_catalog_items")]
+                if show:
+                    calls.append(tool_call("show_catalog_items", catalog_item_ids=[1]))
+                model = ToolCallingModel(responses=[*calls, AIMessage(content="Unused")])
+                original = ToolCallingModel._generate
+
+                def fail_reply(model_instance, messages, **kwargs):
+                    if isinstance(messages[-1], ToolMessage) and (not show or messages[-1].artifact is not None):
+                        raise ValueError("secret model failure")
+                    return original(model_instance, messages, **kwargs)
+
+                service = assistant(Mock(), model=model, catalog_item_service=catalog)
+                events = []
+                with patch.object(ToolCallingModel, "_generate", new=fail_reply):
+                    with self.assertRaisesRegex(ValueError, "secret model failure"):
+                        events.extend(service.stream_response_events("Show options"))
+                self.assert_lifecycle(events, outcome="error")
+                displayed = [e for e in events if e.type == "catalog_items_displayed"]
+                self.assertEqual(len(displayed), 1 if show else 0)
+                if show:
+                    self.assertEqual(displayed[0].items, [pose(1)])
+                    finish = next(e for e in events if e.type == "step_finished" and e.step_id == displayed[0].step_id)
+                    self.assertEqual(finish.outcome, "ok")
+                self.assertFalse(any(e.type == "assistant_message" and e.purpose == "final" for e in events))
+                self.assertNotIn("secret model failure", str(events))
+
+    def test_later_searches_and_next_request_do_not_update_a_displayed_snapshot(self):
+        catalog = Mock()
+        catalog.search.side_effect = [[pose(1)], [pose(2)]]
+        model = ToolCallingModel(responses=[
+            tool_call("search_catalog_items"), tool_call("show_catalog_items", catalog_item_ids=[1]),
+            tool_call("search_catalog_items"), tool_call("show_catalog_items", catalog_item_ids=[2]),
+            AIMessage(content="Shown."),
+        ])
+        service = assistant(Mock(), model=model, catalog_item_service=catalog)
+        first = list(service.stream_response_events("Show one"))
+        self.assert_lifecycle(first)
+        first_display, = [e for e in first if e.type == "catalog_items_displayed"]
+        model.responses = [tool_call("show_catalog_items", catalog_item_ids=[2]), AIMessage(content="")]
+        second = list(service.stream_response_events("Show another"))
+        self.assert_lifecycle(second)
+        second_display, = [e for e in second if e.type == "catalog_items_displayed"]
+        self.assertEqual(first_display.items, [pose(1)])
+        self.assertEqual(second_display.items, [pose(2)])
+        self.assertNotEqual(first_display.request_id, second_display.request_id)
+        self.assertNotEqual(first_display.step_id, second_display.step_id)
+        self.assertFalse(any(e.type == "assistant_message" for e in second))
+
+    def test_legacy_adapters_ignore_catalog_display_and_keep_generation_item_types(self):
+        catalog = Mock()
+        catalog.search.return_value = [pose(1)]
+        generator = Mock()
+        generator.generate.return_value = [pose(2)]
+        model = ToolCallingModel(responses=[
+            tool_call("search_catalog_items"), tool_call("show_catalog_items", catalog_item_ids=[1]),
+            AIMessage(content="Options."),
+        ])
+        service = assistant(lambda: generator, model=model, catalog_item_service=catalog)
+        self.assertEqual(list(service.stream("Show options")), ["Options."])
+        model.responses = [
+            tool_call("show_catalog_items", catalog_item_ids=[1]),
+            tool_call("generate_sequence", request="Practice", count=1), AIMessage(content="Generated."),
+        ]
+        chunks = list(service.generate("Practice"))
+        self.assertEqual(chunks, [pose(2)])
+        self.assertTrue(all(isinstance(chunk, CatalogItemSchema) for chunk in chunks))
+        model.responses = [
+            tool_call("show_catalog_items", catalog_item_ids=[1]),
+            tool_call("generate_sequence", request="Practice", count=1), AIMessage(content="Regenerated."),
+        ]
+        events = list(service.stream_response_events("Regenerate", regenerate_sequence_uuid=service.active_sequence_uuid))
+        self.assert_lifecycle(events)
+        self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
+        show = next(e for e in events if e.type == "step_started" and e.code == "showing_catalog_items")
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == show.step_id)
+        self.assertEqual(finish.outcome, "error")
 
     def test_generator_search_elements_and_commit_arrive_before_followup_reply(self):
         allow_search, allow_selection, allow_reply = self.gate(), self.gate(), self.gate()
@@ -186,6 +363,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         self.assertEqual([event.catalog_item for event in poses], [first, last])
         self.assertEqual([e.completed for e in events if e.type == "step_progress"], [0, 0, 1, 2])
         self.assertEqual(len([e for e in events if e.type == "sequence_committed"]), 1)
+        self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
 
     def test_intermediate_and_final_text_exclude_reasoning_arguments_and_tool_payload(self):
         intermediate = tool_call("search_catalog_items", name="secret arguments")
@@ -350,6 +528,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
                 self.assertEqual(len([e for e in events if e.type == "sequence_committed"]), 0 if no_change else 1)
                 self.assertEqual(len(service.state["sequences"]), 1 if no_change else 2)
                 self.assertFalse(any(e.type == "sequence_element" for e in events))
+                self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
 
     def test_required_generation_without_commit_finishes_with_error(self):
         factory = Mock()

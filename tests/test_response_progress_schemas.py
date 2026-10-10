@@ -7,6 +7,8 @@ from uuid import uuid4
 from pydantic import TypeAdapter, ValidationError
 
 from langchain_app.schemas import (
+    CatalogItemSchema,
+    CatalogItemsDisplayedEvent,
     ChatMessage,
     ExecutionSnapshot,
     ExecutionStepSnapshot,
@@ -53,6 +55,10 @@ class ResponseProgressSchemaTests(unittest.TestCase):
                 "image_url": None, "catalog_tag_names": ["Balance"],
             }),
             self.payload("sequence_committed", **step_fields, sequence_uuid=self.variant_id),
+            self.payload("catalog_items_displayed", step_id=self.step_id, tool_call_id="display-call", items=[{
+                "id": 43, "uuid": None, "name": "Seated fold", "bilateral": False,
+                "image_url": "https://example.com/fold.png", "catalog_tag_names": ["Seated"],
+            }]),
             self.payload("step_finished", **step_fields, outcome="ok",
                          duration_seconds=2, summary="Sequence created"),
             self.payload("request_finished", outcome="complete", duration_seconds=2.1),
@@ -66,6 +72,42 @@ class ResponseProgressSchemaTests(unittest.TestCase):
         self.assertEqual([event.type for event in restored], [p["type"] for p in payloads])
         self.assertEqual(restored[4].catalog_item.name, "Tree pose")
         self.assertEqual(str(restored[5].sequence_uuid), self.variant_id)
+        self.assertIsInstance(restored[6], CatalogItemsDisplayedEvent)
+        self.assertIsInstance(restored[6].items[0], CatalogItemSchema)
+        self.assertEqual(restored[6].items[0].name, "Seated fold")
+
+    def test_display_event_requires_tool_identity_and_nonempty_valid_catalog_items(self):
+        item = {
+            "id": 1, "uuid": None, "name": "Pose", "bilateral": True,
+            "image_url": None, "catalog_tag_names": [],
+        }
+        valid = self.payload(
+            "catalog_items_displayed", step_id=self.step_id, tool_call_id="display-call", items=[item],
+        )
+        for field in ("step_id", "tool_call_id", "items"):
+            with self.subTest(missing=field), self.assertRaises(ValidationError):
+                self.event.validate_python({key: value for key, value in valid.items() if key != field})
+        for fields in (
+            {"tool_call_id": None}, {"tool_call_id": " "}, {"items": []},
+            {"items": [{**item, "image_url": "invalid-url"}]}, {"items": [{"id": 1}]},
+            {"items": [{**item, "mirror_left": True}]},
+        ):
+            with self.subTest(fields=fields), self.assertRaises(ValidationError):
+                self.event.validate_python({**valid, **fields})
+        displayed = self.event.validate_python(valid)
+        self.assertIsNone(displayed.items[0].image_url)
+        self.assertIsNone(displayed.items[0].uuid)
+
+    def test_showing_catalog_items_step_survives_execution_history_round_trip(self):
+        snapshot = ExecutionSnapshot(
+            request_id=self.request_id, outcome="complete", duration_seconds=1,
+            steps=[self.step(
+                code="showing_catalog_items", title="Showing catalog items...",
+                tool_call_id="display-call", summary="Displayed 2 catalog items.",
+            )],
+        )
+        restored = ExecutionSnapshot.model_validate_json(snapshot.model_dump_json())
+        self.assertEqual(restored, snapshot)
 
     def test_final_text_is_distinguished_from_intermediate_text(self):
         for purpose in ("intermediate", "final"):

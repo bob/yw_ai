@@ -5,11 +5,26 @@ chat prompt at the bottom. **Generate** fills and submits a text request such as
 `Generate a yoga sequence with 12 poses.` You can also type a request directly.
 Both paths use `AssistantAgent`, a single LangChain agent with tools in
 `langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
-`get_catalog_tag_names`, and `replace_sequence_element`. Generation still uses
+`show_catalog_items`, `get_catalog_tag_names`, and `replace_sequence_element`. Generation still uses
 the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
 tag queries, and text replies can run without generation. Both catalog endpoints
 always receive `language=en`; the assistant replies in the user's language and
 keeps item names and tags exactly as returned by the API.
+
+Ask to browse catalog poses, ask which poses are available, or find replacement
+candidates without changing a sequence. After searching, the assistant selects
+verified IDs with `show_catalog_items`; the selection appears as thumbnails after
+the reply, outside the progress panel. Its `catalog_items_displayed` event can
+arrive before the final text. Searching alone does not show a gallery.
+Generation, Regenerate, replacement, and technique answers keep their existing
+output unless catalog browsing is separately requested. Generate and Regenerate
+commands reject catalog display. Catalog thumbnails use the same size and styles
+as sequence thumbnails, with real names as alt text and a name fallback for
+missing images. They have no sequence controls, metadata, or mirror brackets.
+Each message stores a detached `catalog_items` snapshot for session reruns,
+including when the model's final text fails. New searches and later selections
+leave earlier messages unchanged.
+See [feature 003: catalog item display](docs/specs/003-catalog-items-display/README.md).
 
 You can specify a duration in minutes instead of a pose count: each pose
 takes 40 seconds, so 10 minutes means 15 poses. Fractional counts round to the

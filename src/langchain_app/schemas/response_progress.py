@@ -10,7 +10,7 @@ from langchain_app.schemas.catalog import CatalogItemSchema
 
 type StepCode = Literal[
     "thinking", "loading_catalog_tags", "searching_catalog_items",
-    "generating_sequence", "updating_sequence", "preparing_response",
+    "showing_catalog_items", "generating_sequence", "updating_sequence", "preparing_response",
 ]
 type StepOutcome = Literal["ok", "no_change", "error"]
 type RequestOutcome = Literal["complete", "error"]
@@ -117,13 +117,21 @@ class SequenceCommittedEvent(_StepEvent):
     sequence_uuid: UUID
 
 
+class CatalogItemsDisplayedEvent(_StepEvent):
+    """Verified selection confirmed by a successful explicit display tool call."""
+
+    type: Literal["catalog_items_displayed"] = "catalog_items_displayed"
+    tool_call_id: _PublicText
+    items: list[CatalogItemSchema] = Field(min_length=1)
+
+
 class RequestFinishedEvent(_ResponseEvent, _RequestResult):
     type: Literal["request_finished"] = "request_finished"
 
 
 type ResponseEvent = Annotated[
     RequestStartedEvent | StepStartedEvent | StepProgressEvent | StepFinishedEvent
-    | AssistantMessageEvent | SequenceElementEvent | SequenceCommittedEvent
+    | AssistantMessageEvent | SequenceElementEvent | SequenceCommittedEvent | CatalogItemsDisplayedEvent
     | RequestFinishedEvent,
     Field(discriminator="type"),
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, TypedDict
 
+from langchain_app.schemas.catalog import CatalogItemSchema
 from langchain_app.schemas.response_progress import ExecutionSnapshot
 
 if TYPE_CHECKING:
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 
 
 class _OptionalChatMessageFields(TypedDict, total=False):
+    catalog_items: list[CatalogItemSchema]
     execution: ExecutionSnapshot | None
     execution_history: list[ExecutionSnapshot]
     sequence_uuid: str | None

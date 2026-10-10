@@ -15,7 +15,7 @@ from langchain_app.services.sequence_generator import SequenceGenerator
 
 @dataclass
 class AssistantToolContext:
-    """Dependencies and generation status scoped to a single request."""
+    """Dependencies and operation status scoped to a single request."""
 
     generator_factory: Callable[[], SequenceGenerator]
     catalog_item_service: CatalogItemService
@@ -25,6 +25,7 @@ class AssistantToolContext:
     regeneration_parent: GeneratedSequence | None = None
     generation_started: bool = False
     generation_completed: bool = False
+    catalog_items_displayed: bool = False
 
 
 def tool_error[ContextT, StateT](

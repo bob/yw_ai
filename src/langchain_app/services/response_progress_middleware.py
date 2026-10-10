@@ -12,7 +12,8 @@ from langgraph.types import Command
 from langchain_app.schemas import CatalogItemSchema
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.schemas.response_progress import (
-    AssistantMessageEvent, SequenceElementEvent, StepFinishedEvent, StepProgressEvent, StepStartedEvent,
+    AssistantMessageEvent, CatalogItemsDisplayedEvent, SequenceElementEvent,
+    StepFinishedEvent, StepProgressEvent, StepStartedEvent,
 )
 from langchain_app.services.response_progress import PendingSequenceCommit, ProgressSignal
 from langchain_app.services.sequence_generator import GeneratorSearchProgress
@@ -21,6 +22,7 @@ from langchain_app.tools.context import AssistantToolContext
 TOOL_STEPS = {
     "get_catalog_tag_names": ("loading_catalog_tags", "Loading catalog tags..."),
     "search_catalog_items": ("searching_catalog_items", "Searching catalog items..."),
+    "show_catalog_items": ("showing_catalog_items", "Showing catalog items..."),
     "generate_sequence": ("generating_sequence", "Generating sequence..."),
     "replace_sequence_element": ("updating_sequence", "Updating sequence..."),
 }
@@ -90,6 +92,8 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
         return "ok", f"Loaded {len(payload.get('tag_names', []))} catalog tags."
     if tool_name == "search_catalog_items":
         return "ok", f"Found {payload.get('returned_count', 0)} catalog items."
+    if tool_name == "show_catalog_items":
+        return "ok", f"Displayed {payload['displayed_count']} catalog items."
     if tool_name == "generate_sequence":
         return "ok", f"Sequence created with {payload['elements_count']} poses."
     return "ok", "Sequence element replaced."
@@ -156,6 +160,12 @@ def _tool_response_progress(
     try:
         result = handler(request)
         outcome, summary = _tool_result(result, name)
+        if name == "show_catalog_items" and outcome == "ok" and isinstance(result, ToolMessage):
+            items = [
+                CatalogItemSchema.model_validate(snapshot).model_copy(deep=True)
+                for snapshot in result.artifact["items"]
+            ]
+            writer(ProgressSignal(CatalogItemsDisplayedEvent, {**identity, "items": items}))
     except Exception:
         writer(ProgressSignal(StepFinishedEvent, {
             **identity, "outcome": "error", "duration_seconds": monotonic() - started_at,
