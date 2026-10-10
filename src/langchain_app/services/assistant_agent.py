@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterator
 from copy import deepcopy
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from langchain.agents import AgentState, create_agent
 from langchain.agents.middleware import InputAgentState, OutputAgentState
@@ -14,13 +14,25 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphRecursionError
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.stream import CustomTransformer, UpdatesTransformer
+from langgraph.stream import CustomTransformer
 from openai import OpenAIError
 
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence, Language
 from langchain_app.schemas.assistant import AssistantInputState, AssistantState
+from langchain_app.schemas.response_progress import (
+    AssistantMessageEvent,
+    RequestStartedEvent,
+    ResponseEvent,
+    SequenceCommittedEvent,
+    SequenceElementEvent,
+)
 from langchain_app.services.catalog_item import CatalogItemService
 from langchain_app.services.catalog_tag import CatalogTagService
+from langchain_app.services.response_progress import ResponseProgress
+from langchain_app.services.response_progress_middleware import (
+    model_response_progress,
+    tool_response_progress,
+)
 from langchain_app.services.sequence_context import (
     invalidate_catalog_candidates,
     selected_sequence_context,
@@ -135,7 +147,10 @@ class AssistantAgent:
             self._agent = create_agent(
                 model=model, tools=list(ASSISTANT_TOOLS), system_prompt=SYSTEM_PROMPT,
                 context_schema=AssistantToolContext, state_schema=AssistantState,
-                middleware=[selected_sequence_context, invalidate_catalog_candidates, sequential_tool_calls],
+                middleware=[
+                    model_response_progress, selected_sequence_context, invalidate_catalog_candidates,
+                    tool_response_progress, sequential_tool_calls,
+                ],
                 checkpointer=self._checkpointer,
             )
         return self._agent
@@ -162,31 +177,42 @@ class AssistantAgent:
         if missing:
             self._agent.update_state(self._config, {"messages": missing}, as_node="tools")
 
-    def stream(
+    def stream_response_events(
         self, request: str, *, require_generation: bool = False,
         regenerate_sequence_uuid: str | None = None,
-    ) -> Iterator[CatalogItemSchema | str]:
-        """Yield generated items and assistant text, excluding tool messages.
+        request_id: UUID | None = None,
+    ) -> Iterator[ResponseEvent]:
+        """Yield public progress, provisional elements and confirmed state commits.
 
-        Full snapshots and message history persist for the life of this instance.
-        Dependencies and operation flags in tool context remain request-scoped.
+        A fatal failure emits request_finished(error) before propagating the
+        exception. Legacy adapters therefore retain their exception behavior.
         """
+        progress = ResponseProgress(request_id)
+        source_uuid = regenerate_sequence_uuid or self.active_sequence_uuid
+        try:
+            source_id = UUID(source_uuid) if source_uuid else None
+        except ValueError:
+            # Invalid Regenerate input still gets a complete request lifecycle.
+            source_id = None
+        yield progress.event(
+            RequestStartedEvent, source_sequence_uuid=source_id,
+        )
         parent = None
         active_before = self.active_sequence_uuid
-        if regenerate_sequence_uuid is not None:
-            parent = self.get_sequence(regenerate_sequence_uuid)
-            if parent is None:
-                raise ValueError("The Regenerate source is not stored in this assistant session")
-            request = parent.generation_request
-
-        context = AssistantToolContext(
-            generator_factory=self._generator_factory,
-            catalog_item_service=self._catalog_item_service,
-            catalog_tag_service=self._catalog_tag_service,
-            user_request=request, require_generation=require_generation,
-            regeneration_parent=parent,
-        )
+        context = None
         try:
+            if regenerate_sequence_uuid is not None:
+                parent = self.get_sequence(regenerate_sequence_uuid)
+                if parent is None:
+                    raise ValueError("The Regenerate source is not stored in this assistant session")
+                request = parent.generation_request
+            context = AssistantToolContext(
+                generator_factory=self._generator_factory,
+                catalog_item_service=self._catalog_item_service,
+                catalog_tag_service=self._catalog_tag_service,
+                user_request=request, require_generation=require_generation,
+                regeneration_parent=parent,
+            )
             agent = self._get_agent()
             inputs: AssistantInputState = {
                 "messages": [{"role": "user", "content": request}],
@@ -197,27 +223,45 @@ class AssistantAgent:
             stream = agent.stream_events(
                 inputs,
                 context=context, config=self._config,
-                version="v3", transformers=[CustomTransformer, UpdatesTransformer],
+                # values must be readable through get_state before confirming commit.
+                version="v3", transformers=[CustomTransformer], durability="sync",
             )
-            for event_type, data in stream.interleave("custom", "updates"):
-                if event_type == "custom":
-                    yield data
-                elif event_type == "updates":
-                    for update in data.values():
-                        if update is None:
-                            continue
-                        for message in update.get("messages", []):
-                            if isinstance(message, AIMessage) and not message.tool_calls and message.text:
-                                yield message.text
+            for event_type, data in stream.interleave("custom", "values"):
+                events = progress.accept(data) if event_type == "custom" else progress.confirm_commits(data)
+                for event in events:
+                    if isinstance(event, SequenceCommittedEvent):
+                        context.generation_completed = progress.generation_completed
+                    yield event
             if require_generation and not context.generation_completed:
                 raise AssistantAgentError("The language model did not call the generation tool successfully")
+            yield from progress.finish()
         except Exception as exc:
+            # Preserve a committed variant even if preparing the final reply failed.
+            for event in progress.confirm_commits(self.state):
+                if isinstance(event, SequenceCommittedEvent) and context is not None:
+                    context.generation_completed = progress.generation_completed
+                yield event
             self._complete_failed_tool_calls()
-            if parent is not None and not context.generation_completed and self._agent is not None:
+            if parent is not None and context is not None and not context.generation_completed and self._agent is not None:
                 self._agent.update_state(self._config, {"active_sequence_uuid": active_before})
+            yield from progress.finish("Could not complete request. Please try again.")
             if isinstance(exc, (OpenAIError, GraphRecursionError)):
                 raise AssistantAgentError(f"Language model request failed: {exc}") from exc
             raise
+
+    def stream(
+        self, request: str, *, require_generation: bool = False,
+        regenerate_sequence_uuid: str | None = None,
+    ) -> Iterator[CatalogItemSchema | str]:
+        """Compatibility adapter: provisional items and final public text only."""
+        for event in self.stream_response_events(
+            request, require_generation=require_generation,
+            regenerate_sequence_uuid=regenerate_sequence_uuid,
+        ):
+            if isinstance(event, SequenceElementEvent):
+                yield event.catalog_item
+            elif isinstance(event, AssistantMessageEvent) and event.purpose == "final":
+                yield event.text
 
     def generate(
         self, request: str, *, language: Language = "en", sequence_uuid: str | None = None,

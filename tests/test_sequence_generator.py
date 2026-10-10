@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from langchain_app.schemas import CatalogItemSchema
-from langchain_app.services.sequence_generator import SequenceGenerator
+from langchain_app.services.sequence_generator import GeneratorSearchProgress, SequenceGenerator
 
 
 def item(item_id, tags=(), *, image=True):
@@ -167,6 +167,41 @@ class SequenceGeneratorTests(unittest.TestCase):
     def test_negative_count_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "negative"):
             list(self.generator.generate("practice", language="en", count=-1))
+        self.catalog.search.assert_not_called()
+
+    def test_optional_observer_brackets_search_and_counts_only_usable_candidates(self):
+        observed = []
+        first = item(1, ["Other/Starting"])
+
+        def search(**kwargs):
+            self.assertEqual(observed, [GeneratorSearchProgress("started")])
+            return [first, item(2, image=False)]
+
+        self.catalog.search.side_effect = search
+        sequence = self.generator.generate("Practice", language="en", count=1, progress_observer=observed.append)
+        self.assertEqual(observed, [])
+        self.assertEqual(next(sequence), first)
+        self.assertEqual(observed, [
+            GeneratorSearchProgress("started"), GeneratorSearchProgress("finished", candidate_count=1),
+        ])
+        self.assertEqual(list(sequence), [])
+
+    def test_observer_reports_search_failure_before_exception_is_propagated(self):
+        observed = []
+        self.catalog.search.side_effect = ValueError("Cannot load catalog")
+        with self.assertRaisesRegex(ValueError, "Cannot load catalog"):
+            list(self.generator.generate("Practice", language="en", count=1, progress_observer=observed.append))
+        self.assertEqual(observed, [
+            GeneratorSearchProgress("started"), GeneratorSearchProgress("finished", outcome="error"),
+        ])
+
+    def test_observer_does_not_invent_search_for_zero_or_invalid_count(self):
+        observer = Mock()
+        self.assertEqual(list(self.generator.generate("Practice", language="en", count=0,
+                                                      progress_observer=observer)), [])
+        with self.assertRaises(ValueError):
+            list(self.generator.generate("Practice", language="en", count=-1, progress_observer=observer))
+        observer.assert_not_called()
         self.catalog.search.assert_not_called()
 
 

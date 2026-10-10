@@ -1,7 +1,9 @@
 """Generate yoga sequences from catalog items."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from random import choice, sample
+from typing import Literal
 
 from langchain_app.schemas import CatalogItemSchema, Language
 from langchain_app.services.catalog_item import CatalogItemService
@@ -10,6 +12,15 @@ from langchain_app.services.type_safe import TypeSafeService
 STARTING_TAG = "Other/Starting"
 FINISHING_TAG = "Other/Finishing"
 BATCH_SIZE = 10
+
+
+@dataclass(frozen=True)
+class GeneratorSearchProgress:
+    """Optional observation of candidate loading, independent of agent/UI code."""
+
+    phase: Literal["started", "finished"]
+    outcome: Literal["ok", "error"] = "ok"
+    candidate_count: int | None = None
 
 
 class SequenceGenerator:
@@ -29,6 +40,7 @@ class SequenceGenerator:
         *,
         language: Language,
         count: int,
+        progress_observer: Callable[[GeneratorSearchProgress], None] | None = None,
     ) -> Iterator[CatalogItemSchema]:
         """Yield the catalog items selected for a requested yoga sequence."""
 
@@ -37,15 +49,24 @@ class SequenceGenerator:
         if count == 0:
             return
 
-        catalog_items = [
-            CatalogItemSchema.model_validate(
-                item.model_dump(exclude={"rigman_data", "second_side_rigman_data"})
-            )
-            for item in self._catalog_item_service.search(
-                with_tags=True, with_rigman=False, limit=0, rand=True
-            )
-            if item.image_url is not None
-        ]
+        if progress_observer is not None:
+            progress_observer(GeneratorSearchProgress("started"))
+        try:
+            catalog_items = [
+                CatalogItemSchema.model_validate(
+                    item.model_dump(exclude={"rigman_data", "second_side_rigman_data"})
+                )
+                for item in self._catalog_item_service.search(
+                    with_tags=True, with_rigman=False, limit=0, rand=True
+                )
+                if item.image_url is not None
+            ]
+        except Exception:
+            if progress_observer is not None:
+                progress_observer(GeneratorSearchProgress("finished", outcome="error"))
+            raise
+        if progress_observer is not None:
+            progress_observer(GeneratorSearchProgress("finished", candidate_count=len(catalog_items)))
         starting_items = [
             item
             for item in catalog_items

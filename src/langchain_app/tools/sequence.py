@@ -34,7 +34,9 @@ def generate_sequence(
     context.generation_started = True
     generator = context.generator_factory()
     items = []
-    for item in generator.generate(request, language="en", count=count):
+    for item in generator.generate(
+        request, language="en", count=count, progress_observer=runtime.stream_writer,
+    ):
         items.append(item.model_copy(deep=True))
         runtime.stream_writer(item)
     if not items:
@@ -43,7 +45,6 @@ def generate_sequence(
         items, request=context.user_request, parent=context.regeneration_parent,
     )
     snapshot = sequence.model_dump(mode="json")
-    context.generation_completed = True
     return Command(update={
         "sequences": {str(sequence.uuid): snapshot},
         "active_sequence_uuid": str(sequence.uuid),

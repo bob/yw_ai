@@ -3,7 +3,7 @@
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, call, patch
+from unittest.mock import ANY, Mock, call, patch
 from uuid import uuid4
 
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
@@ -115,8 +115,8 @@ class SequenceVariantTests(unittest.TestCase):
             app.button(key="assistant-sequence-1-regenerate").click().run()
             self.assertFalse(app.exception)
             self.assertEqual(generator.generate.call_args_list, [
-                call(request, language="en", count=12),
-                call(request, language="en", count=12),
+                call(request, language="en", count=12, progress_observer=ANY),
+                call(request, language="en", count=12, progress_observer=ANY),
             ])
             self.assertEqual(language_model.received_requests, [request, request])
 
@@ -135,7 +135,7 @@ class SequenceVariantTests(unittest.TestCase):
             self.assertEqual(language_model.received_requests, [request])
             self.assertEqual(app.session_state.messages[-1]["sequence_request"], request)
             self.assertEqual(app.session_state.messages[-1]["sequence"]["thumbnails"][0]["alt"], "Pose 1")
-            generator.generate.assert_called_once_with(request, language="en", count=15)
+            generator.generate.assert_called_once_with(request, language="en", count=15, progress_observer=ANY)
 
     def test_twelve_pose_request_produces_twelve_thumbnails_and_caption(self):
         request = "Generate a yoga sequence with 12 poses."
@@ -175,9 +175,12 @@ class SequenceVariantTests(unittest.TestCase):
             app.button(key="generate-sequence").click().run()
             self.assertFalse(app.exception)
             self.assertTrue(app.error)
-            self.assertEqual(app.session_state.messages, [{
+            self.assertEqual(app.session_state.messages[0], {
                 "role": "user", "content": "Generate a yoga sequence with 9 poses."
-            }])
+            })
+            self.assertEqual(len(app.session_state.messages), 2)
+            self.assertIsNone(app.session_state.messages[1]["sequence"])
+            self.assertEqual(app.session_state.messages[1]["execution"].outcome, "error")
 
     def test_regenerate_appends_and_navigation_does_not_generate(self):
         generator = Mock()
@@ -201,7 +204,7 @@ class SequenceVariantTests(unittest.TestCase):
             app.button(key="assistant-sequence-1-next").click().run()
             self.assertFalse(app.exception)
             self.assertEqual(generator.generate.call_args_list, [
-                call("Generate a yoga sequence with 9 poses.", language="en", count=9)
+                call("Generate a yoga sequence with 9 poses.", language="en", count=9, progress_observer=ANY)
             ] * 3)
 
     def test_generation_error_keeps_existing_variant(self):
@@ -468,7 +471,7 @@ class SequenceVariantTests(unittest.TestCase):
             self.assertEqual(regenerated.parent_uuid, variant.uuid)
             self.assertEqual(regenerated.family_uuid, source.family_uuid)
             self.assertEqual(regenerated.generation_request, request)
-            generator.generate.assert_called_with(request, language="en", count=9)
+            generator.generate.assert_called_with(request, language="en", count=9, progress_observer=ANY)
 
     def test_committed_replacement_is_retained_in_ui_when_text_reply_fails(self):
         generator = Mock()
@@ -519,5 +522,10 @@ class SequenceVariantTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertIsNone(app.session_state.messages[-1]["sequence"])
             self.assertEqual(app.session_state.messages[-1]["content"], "Pose 3 is already selected.")
+            execution = app.session_state.messages[-1]["execution"]
+            self.assertEqual(execution.outcome, "complete")
+            self.assertIsNone(execution.sequence_uuid)
+            update = next(step for step in execution.steps if step.code == "updating_sequence")
+            self.assertEqual(update.outcome, "no_change")
             self.assertEqual(len(service.state["sequences"]), 1)
             self.assertEqual(service.active_sequence_uuid, str(source.uuid))

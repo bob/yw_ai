@@ -4,7 +4,7 @@ import json
 import unittest
 from threading import Event
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -106,7 +106,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(list(sequence), poses[1:])
         factory.assert_called_once()
         generator.generate.assert_called_once_with(
-            request, language="en", count=12
+            request, language="en", count=12, progress_observer=ANY,
         )
         self.assertEqual(model.received_requests, [request])
 
@@ -214,7 +214,9 @@ class AssistantAgentTests(unittest.TestCase):
         snapshot = json.loads(model.received_messages[1][-1].content)
         self.assertEqual(snapshot["elements"][0]["catalog_item"]["name"], "Child's pose")
         self.assertEqual(snapshot["language"], "en")
-        generator.generate.assert_called_once_with("Практика из одной асаны", language="en", count=1)
+        generator.generate.assert_called_once_with(
+            "Практика из одной асаны", language="en", count=1, progress_observer=ANY,
+        )
 
     def test_catalog_api_error_is_returned_to_model_as_error_not_empty_success(self):
         catalog = Mock()

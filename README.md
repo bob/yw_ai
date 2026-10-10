@@ -53,7 +53,15 @@ reruns retain it. Recovery after a process restart or a new browser session is n
 implemented. Legacy cards with thumbnails alone remain viewable without supplying
 invented catalog data to the model.
 
-This completes steps 1–7 of the first release of [create-assistant-agent](docs/specs/create-assistant-agent/README.md).
+Chat, **Generate**, and **Regenerate** show a live execution block immediately.
+It follows real model and catalog work, streams provisional poses, and collapses
+when the response finishes. Public intermediate messages, completed steps, elapsed
+time, and errors remain available after reruns. Each regeneration keeps its earlier
+attempts. Request and variant controls are disabled during execution; a failed
+attempt keeps any already committed sequence available for Save. See
+[feature 002: assistant response progress](docs/specs/002-assistant-response-progress/README.md).
+
+This completes steps 1–7 of the first release of [feature 001: create-assistant-agent](docs/specs/001-create-assistant-agent/README.md).
 
 ```bash
 uv run --env-file .env streamlit run src/langchain_app/assistant.py

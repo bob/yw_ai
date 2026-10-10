@@ -3,7 +3,7 @@
 import time
 from collections.abc import Callable, Iterable, Iterator
 from html import escape
-from itertools import chain
+from time import monotonic
 from typing import TypedDict
 from uuid import uuid4
 
@@ -17,10 +17,11 @@ from langchain_app.schemas import (
 )
 from langchain_app.services import (
     AssistantAgent,
-    AssistantAgentError,
-    CatalogItemServiceError,
     SequenceService,
-    TypeSafeServiceError,
+)
+from langchain_app.schemas.response_progress import SequenceCommittedEvent, SequenceElementEvent
+from langchain_app.ui.response_progress import (
+    PendingResponse, ResponseProgressRenderer, enqueue_regeneration, render_execution,
 )
 from langchain_app.ui.sequence_import import render_sequence_import
 
@@ -165,53 +166,20 @@ class SequenceRenderer:
         self._language: Language = language
         self._catalog_url = catalog_url
 
-    def render_generated_sequence(
-        self, request: str, *, key: str, sequence_uuid: str | None = None,
-    ) -> SequenceView | None:
-        """Generate from the original request and retain only a complete result."""
-        if self._generator_factory is None:
-            raise ValueError("A generator factory is required to generate sequences")
-        assistant = self._generator_factory()
-        return self._render_catalog_items(
-            assistant.generate(request, language=self._language, sequence_uuid=sequence_uuid),
-            key=key, assistant=assistant,
-        )
-
-    def _render_catalog_items(
-        self, catalog_items: Iterator[CatalogItemSchema], *, key: str, assistant: AssistantAgent,
-    ) -> SequenceView | None:
-        """Display items as they arrive, retaining only a complete result."""
-        previous_uuid = assistant.active_sequence_uuid
-        try:
-            first = next(catalog_items, None)
-            if first is not None:
-                self.render(
-                    SequenceView(
-                        info=create_sequence_view(self._language)["info"],
-                        thumbnails=generate_thumbnails_one_by_one(chain([first], catalog_items)),
-                    ),
-                    key=key,
-                )
-        except (
-            CatalogItemServiceError, TypeSafeServiceError, AssistantAgentError, ValueError
-        ) as exc:
-            st.error(f"Could not update sequence: {exc}")
-        # A committed tool result survives failure of the subsequent text reply.
-        active_uuid = assistant.active_sequence_uuid
-        if active_uuid is None or active_uuid == previous_uuid:
-            return None
-        snapshot = assistant.get_sequence(active_uuid)
-        return generated_sequence_view(snapshot) if snapshot is not None else None
-
-    def render_messages(self, messages: list[ChatMessage]) -> None:
+    def render_messages(self, messages: list[ChatMessage], *, disabled: bool = False) -> None:
         """Display chat history with controls for each generated sequence."""
         for message_index, message in enumerate(messages):
             with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                self._render_message_sequence(messages, message_index)
+                for snapshot in message.get("execution_history", []):
+                    render_execution(snapshot)
+                if snapshot := message.get("execution"):
+                    render_execution(snapshot)
+                if message["content"]:
+                    st.markdown(message["content"])
+                self._render_message_sequence(messages, message_index, disabled=disabled)
 
     def _render_message_sequence(
-        self, messages: list[ChatMessage], message_index: int
+        self, messages: list[ChatMessage], message_index: int, *, disabled: bool = False,
     ) -> None:
         message = messages[message_index]
         assistant = None
@@ -263,25 +231,27 @@ class SequenceRenderer:
             horizontal_alignment="left",
             vertical_alignment="center",
         ):
-            regenerate = st.button(
-                "Regenerate", key=f"{key}-regenerate", disabled=request is None
+            st.button(
+                "Regenerate", key=f"{key}-regenerate", disabled=disabled or request is None,
+                on_click=enqueue_regeneration,
+                args=(request or "", selected_uuid if assistant is not None else None, message_index),
             )
             if assistant is not None and selected_uuid is not None:
                 if selected_uuid == assistant.active_sequence_uuid:
                     st.caption("Active sequence", width="content")
-                elif st.button("Use this sequence", key=f"{key}-use"):
+                elif st.button("Use this sequence", key=f"{key}-use", disabled=disabled):
                     assistant.select_sequence(selected_uuid)
                     st.rerun()
             if len(variants) > 1:
                 if st.button(
                     "Previous Sequence", icon=":material/chevron_left:",
-                    key=f"{key}-previous", disabled=selected == 0,
+                    key=f"{key}-previous", disabled=disabled or selected == 0,
                 ):
                     selected -= 1
                 st.caption(f"{selected + 1}/{len(variants)}", width="content")
                 if st.button(
                     "Next Sequence", icon=":material/chevron_right:",
-                    key=f"{key}-next", disabled=selected == len(variants) - 1,
+                    key=f"{key}-next", disabled=disabled or selected == len(variants) - 1,
                 ):
                     selected += 1
 
@@ -303,53 +273,67 @@ class SequenceRenderer:
                 key=f"{key}-save-{selected}",
             )
 
-        if regenerate and request is not None:
-            with st.container():
-                new_sequence = self.render_generated_sequence(
-                    request, key=f"{key}-live",
-                    sequence_uuid=selected_uuid if assistant is not None else None,
-                )
-            if new_sequence is not None:
-                variants.append(new_sequence)
-                message["selected_sequence_index"] = len(variants) - 1
-                message["sequence"] = new_sequence
-                new_uuid = new_sequence["info"]["uuid"]
-                message["sequence_uuid"] = new_uuid
-                if variant_uuids is not None and new_uuid is not None:
-                    variant_uuids.append(new_uuid)
-                st.rerun()
-
     def render_response(
         self, request: str, *, content: str, key: str, require_generation: bool = False,
+        pending: PendingResponse | None = None,
     ) -> ChatMessage:
-        """Display assistant text and any generated sequence in a chat message."""
-        if self._generator_factory is None:
-            raise ValueError("An assistant factory is required")
-
-        assistant = self._generator_factory()
-        texts = [content] if content else []
+        """Use one event lifecycle for chat, Generate and every Regenerate attempt."""
+        pending = pending or PendingResponse(request, require_generation=require_generation)
+        assistant = None
+        sequence = None
+        snapshots = []
         with st.chat_message("assistant"):
+            progress = ResponseProgressRenderer(pending.request_id, pending.accepted_at, pending.sequence_uuid)
             text_output = st.empty()
+            sequence_output = st.empty()
             if content:
                 text_output.markdown(content)
-
-            def catalog_items() -> Iterator[CatalogItemSchema]:
-                for chunk in assistant.stream(request, require_generation=require_generation):
-                    if isinstance(chunk, CatalogItemSchema):
-                        yield chunk
-                    else:
-                        texts.append(chunk)
-                        text_output.markdown("".join(texts))
-
-            sequence = self._render_catalog_items(catalog_items(), key=key, assistant=assistant)
-
+            provisional = create_sequence_view(self._language)
+            thumbnails = []
+            provisional["thumbnails"] = thumbnails
+            try:
+                if self._generator_factory is None:
+                    raise ValueError("An assistant factory is required")
+                assistant = self._generator_factory()
+                for event in assistant.stream_response_events(
+                    request, require_generation=pending.require_generation,
+                    regenerate_sequence_uuid=pending.sequence_uuid,
+                    request_id=pending.request_id,
+                ):
+                    if not progress.accept(event):
+                        continue
+                    text = content + "".join(progress.execution.final_texts)
+                    if text:
+                        text_output.markdown(text)
+                    if isinstance(event, SequenceElementEvent):
+                        for thumbnail in generate_thumbnails_one_by_one([event.catalog_item]):
+                            thumbnail["order"] = event.order
+                            thumbnails.append(thumbnail)
+                        with sequence_output.container():
+                            self.render(provisional, key=f"{key}-{event.event_index}")
+                    elif isinstance(event, SequenceCommittedEvent):
+                        committed = assistant.get_sequence(str(event.sequence_uuid))
+                        if committed is None:
+                            raise ValueError("Committed sequence is missing from agent state")
+                        sequence = generated_sequence_view(committed)
+                        with sequence_output.container():
+                            self.render(sequence, key=f"{key}-{event.event_index}")
+            except Exception:
+                # The producer normally emitted its terminal error already.
+                # Dependency initialization failures have no stream to close.
+                progress.execution.fail(max(0.0, monotonic() - pending.accepted_at))
+            execution = progress.finish()
+            if sequence is None:
+                sequence_output.empty()
+            if sequence is not None and assistant is not None:
+                snapshots = assistant.get_sequence_variants(sequence["info"]["uuid"])
         sequence_uuid = sequence["info"]["uuid"] if sequence is not None else None
-        snapshots = assistant.get_sequence_variants(sequence_uuid) if sequence_uuid else []
         variants = [generated_sequence_view(snapshot) for snapshot in snapshots]
         selected = next((index for index, snapshot in enumerate(snapshots) if str(snapshot.uuid) == sequence_uuid), 0)
         return {
             "role": "assistant",
-            "content": "".join(texts),
+            "content": content + "".join(progress.execution.final_texts),
+            "execution": execution,
             "sequence": sequence,
             "sequence_uuid": sequence_uuid,
             "sequence_variant_uuids": [str(snapshot.uuid) for snapshot in snapshots],
