@@ -50,3 +50,33 @@ def replace_element(
     updated.catalog_item = replacement.model_copy(deep=True)
     updated.start_mirror = updated.end_mirror = replacement.bilateral
     return variant
+
+
+def swap_elements(
+    sequence: GeneratedSequence, *, first_element_id: UUID,
+    second_element_id: UUID, request: str,
+) -> GeneratedSequence | None:
+    """Swap two occurrences; return None when both IDs select the same occurrence."""
+    first_index = next((
+        index for index, item in enumerate(sequence.elements)
+        if item.element_id == first_element_id
+    ), None)
+    second_index = next((
+        index for index, item in enumerate(sequence.elements)
+        if item.element_id == second_element_id
+    ), None)
+    if first_index is None or second_index is None:
+        raise SequenceEditorError("sequence_element_not_found", "The occurrence is not in the selected sequence")
+    if first_element_id == second_element_id:
+        return None
+
+    variant = sequence.model_copy(deep=True, update={
+        "uuid": uuid4(), "parent_uuid": sequence.uuid, "operation": "swap",
+        "operation_request": request,
+    })
+    variant.elements[first_index], variant.elements[second_index] = (
+        variant.elements[second_index], variant.elements[first_index],
+    )
+    for order, element in enumerate(variant.elements, start=1):
+        element.order = order
+    return variant

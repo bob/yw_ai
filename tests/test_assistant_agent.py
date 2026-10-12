@@ -196,6 +196,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(list(service.stream("Помоги выбрать практику")), ["Какую практику вы хотите?"])
         self.assertEqual(set(model.tool_names), {
             "generate_sequence", "search_catalog_items", "get_catalog_tag_names", "replace_sequence_element",
+            "swap_sequence_elements",
             "show_catalog_items",
         })
         for registered_tool in ASSISTANT_TOOLS:

@@ -12,8 +12,10 @@ from pydantic import TypeAdapter
 from langchain_app.schemas import CatalogItemSchema, CatalogItemsDisplayedEvent, ResponseEvent
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
+from langchain_app.services.sequence_editor import swap_elements
 from langchain_app.services.sequence_generator import SequenceGenerator
 from test_assistant_agent import ToolCallingModel, assistant, pose, tool_call, tool_model
+from test_sequence_swap import sequence, swap_call
 
 
 class ResponseProgressStreamTests(unittest.TestCase):
@@ -539,6 +541,129 @@ class ResponseProgressStreamTests(unittest.TestCase):
         self.assert_lifecycle(events, outcome="error")
         self.assertFalse(any(e.type == "sequence_committed" for e in events))
         factory.assert_not_called()
+
+    def generated_swap_source(self):
+        generator = Mock()
+        generator.generate.return_value = [element.catalog_item for element in sequence().elements]
+        factory, catalog, tags = Mock(return_value=generator), Mock(), Mock()
+        model = tool_model("Original practice", count=5)
+        service = assistant(factory, model=model, catalog_item_service=catalog, catalog_tag_service=tags)
+        list(service.generate("Original practice"))
+        factory.reset_mock()
+        return service, service.get_sequence(service.active_sequence_uuid), model, factory, catalog, tags
+
+    def test_swap_start_precedes_edit_and_commit_confirms_full_state_before_followup_reply(self):
+        service, source, model, factory, catalog, tags = self.generated_swap_source()
+        allow_swap, allow_reply = self.gate(), self.gate()
+        model.responses = [swap_call(source), AIMessage(content="Swapped third and fifth.")]
+        original = ToolCallingModel._generate
+
+        def blocked_swap(*args, **kwargs):
+            self.wait(allow_swap)
+            return swap_elements(*args, **kwargs)
+
+        def followup(model_instance, messages, **kwargs):
+            if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
+                self.wait(allow_reply)
+            return original(model_instance, messages, **kwargs)
+
+        request_id = uuid4()
+        events = []
+        with patch("langchain_app.tools.sequence.swap_elements", side_effect=blocked_swap), patch.object(
+            ToolCallingModel, "_generate", new=followup,
+        ):
+            for event in service.stream_response_events("Swap third and fifth", request_id=request_id):
+                events.append(event)
+                if event.type == "step_started" and event.code == "updating_sequence":
+                    self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                    self.assertEqual(len(service.state["sequences"]), 1)
+                    allow_swap.set()
+                elif event.type == "sequence_committed":
+                    variant = service.get_sequence(str(event.sequence_uuid))
+                    self.assertEqual(variant.operation, "swap")
+                    self.assertEqual([element.catalog_item.id for element in variant.elements], [1, 2, 5, 4, 3])
+                    self.assertEqual(service.active_sequence_uuid, str(event.sequence_uuid))
+                    self.assertTrue(service.state["turn_operation_committed"])
+                    self.assertEqual(service.state["sequences"][str(variant.uuid)], variant.model_dump(mode="json"))
+                    self.assertFalse(any(e.type == "step_finished" and e.step_id == event.step_id for e in events))
+                    self.assertFalse(any(e.type == "assistant_message" and e.purpose == "final" for e in events))
+                    allow_reply.set()
+        self.assert_lifecycle(events)
+        committed, = [e for e in events if e.type == "sequence_committed"]
+        step = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+        self.assertEqual(step.title, "Swapping sequence elements...")
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Sequence elements swapped."))
+        self.assertEqual(committed.request_id, request_id)
+        self.assertEqual(committed.step_id, step.step_id)
+        self.assertEqual(committed.tool_call_id, step.tool_call_id)
+        self.assertEqual(finish.tool_call_id, step.tool_call_id)
+        self.assertEqual(model.received_messages[-1][-1].tool_call_id, step.tool_call_id)
+        self.assertLess(step.event_index, committed.event_index)
+        self.assertLess(committed.event_index, finish.event_index)
+        self.assertFalse(any(e.type in ("sequence_element", "catalog_items_displayed") for e in events))
+        self.assertEqual(len(service.state["sequences"]), 2)
+        self.assertEqual(service.get_sequence(str(source.uuid)), source)
+        factory.assert_not_called()
+        catalog.assert_not_called()
+        self.assertEqual(catalog.mock_calls, [])
+        self.assertEqual(tags.mock_calls, [])
+
+    def test_no_change_and_invalid_swaps_finish_without_commit_or_preview_events(self):
+        for case in ("no_change", "unknown_element", "invalid_uuid", "stale_sequence"):
+            with self.subTest(case=case):
+                service, source, model, factory, catalog, tags = self.generated_swap_source()
+                overrides = {
+                    "no_change": {"second_element_id": str(source.elements[2].element_id)},
+                    "unknown_element": {"second_element_id": str(uuid4())},
+                    "invalid_uuid": {"first_element_id": "invalid-uuid"},
+                    "stale_sequence": {"sequence_uuid": str(uuid4())},
+                }[case]
+                model.responses = [swap_call(source, **overrides), AIMessage(content="No swap applied.")]
+                before = service.state["sequences"]
+                events = list(service.stream_response_events("Swap the pair"))
+                self.assert_lifecycle(events)
+                step = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+                finish = next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+                self.assertEqual(step.title, "Swapping sequence elements...")
+                self.assertEqual(finish.outcome, "no_change" if case == "no_change" else "error")
+                self.assertEqual(finish.tool_call_id, step.tool_call_id)
+                if case == "no_change":
+                    self.assertEqual(finish.summary, "Both references identify the same sequence element; no change was needed.")
+                self.assertFalse(any(e.type in ("sequence_committed", "sequence_element", "catalog_items_displayed") for e in events))
+                self.assertEqual(service.state["sequences"], before)
+                self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                self.assertFalse(service.state["turn_operation_committed"])
+                factory.assert_not_called()
+                self.assertEqual(catalog.mock_calls, [])
+                self.assertEqual(tags.mock_calls, [])
+
+    def test_swap_commit_survives_failure_of_final_model_call(self):
+        service, source, model, factory, catalog, tags = self.generated_swap_source()
+        model.responses = [swap_call(source)]
+        original = ToolCallingModel._generate
+
+        def fail_followup(model_instance, messages, **kwargs):
+            if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
+                raise RuntimeError("Private model failure")
+            return original(model_instance, messages, **kwargs)
+
+        events = []
+        with patch.object(ToolCallingModel, "_generate", new=fail_followup):
+            with self.assertRaisesRegex(RuntimeError, "Private model failure"):
+                events.extend(service.stream_response_events("Swap third and fifth"))
+        self.assert_lifecycle(events, outcome="error")
+        committed, = [e for e in events if e.type == "sequence_committed"]
+        step = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Sequence elements swapped."))
+        self.assertEqual(committed.step_id, step.step_id)
+        self.assertEqual(committed.tool_call_id, step.tool_call_id)
+        self.assertEqual(service.active_sequence_uuid, str(committed.sequence_uuid))
+        self.assertEqual(service.get_sequence(str(committed.sequence_uuid)).operation, "swap")
+        self.assertEqual(service.get_sequence(str(source.uuid)), source)
+        self.assertEqual(len(service.state["sequences"]), 2)
+        self.assertNotIn("Private model failure", str(events))
 
     def test_invalid_regenerate_source_still_has_a_terminal_error(self):
         for source in (str(uuid4()), "invalid-uuid"):

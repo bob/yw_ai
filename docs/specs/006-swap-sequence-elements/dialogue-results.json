@@ -1,0 +1,238 @@
+{
+  "model": "openai:gpt-5.5",
+  "started_at": "2026-10-12T08:41:11.819577+00:00",
+  "cases": [
+    {
+      "case": "positions",
+      "request": "Поменяй третью и пятую асаны местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "1822be83-f1e4-471d-85ef-279352f3cbcc",
+            "first_element_id": "11808ec0-53d4-4233-a0ea-afe741693785",
+            "second_element_id": "10d6e8bd-054a-4f34-b7e7-da62135ea34e"
+          },
+          "id": "call_I35PocoxjdrHPc3YbdUkgVDA",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: поменял местами 3-ю и 5-ю асаны.\n\n- Tree pose перемещена с позиции 3 на позицию 5.\n- Corpse pose перемещена с позиции 5 на позицию 3.",
+      "commit_count": 1
+    },
+    {
+      "case": "boundaries",
+      "request": "Поменяй первую и последнюю позы",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "0174ef23-6da8-4028-a552-5cb9fddf334b",
+            "first_element_id": "0f4a0db6-c798-460f-a676-798a8ddef4e0",
+            "second_element_id": "c93a106f-7648-401a-ab59-800f83380e24"
+          },
+          "id": "call_IpCtIq4158KIO0Wr7wy8K39A",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: поменял местами первую и последнюю позы.\n\n- **Mountain pose** перемещена с позиции **1** на позицию **5**\n- **Corpse pose** перемещена с позиции **5** на позицию **1**",
+      "commit_count": 1
+    },
+    {
+      "case": "names",
+      "request": "Поменяй местами Tree pose и Mountain pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "0963263b-5f15-4c36-8701-d15fd52263a0",
+            "first_element_id": "22e8721c-1339-4398-9403-de090ee3c8f9",
+            "second_element_id": "aa060eec-9814-466c-a45e-6c75f188ffc9"
+          },
+          "id": "call_UxPSJ6buT53Xk8JdMtmyIxkN",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: поменяла местами Tree pose и Mountain pose.\n\n- Tree pose: с позиции 3 → на позицию 1\n- Mountain pose: с позиции 1 → на позицию 3",
+      "commit_count": 1
+    },
+    {
+      "case": "polite_action",
+      "request": "Можешь поменять третью и пятую местами?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "e66a90b1-1aff-4c62-ace5-65aef09600d7",
+            "first_element_id": "382ab6b3-ceda-4c1d-8089-7ac85b6d91f9",
+            "second_element_id": "d665e152-95c3-430d-98e9-0245f967b5c5"
+          },
+          "id": "call_pvSDxQQzXFAKoe1O3rCxjVSt",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: поменял местами 3-ю и 5-ю позы.\n\n- Tree pose переместилась с позиции 3 на позицию 5.\n- Corpse pose переместилась с позиции 5 на позицию 3.",
+      "commit_count": 1
+    },
+    {
+      "case": "explanation",
+      "request": "Что изменится, если поменять третью и пятую местами?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Если поменять местами 3-ю и 5-ю позы, изменение было бы таким:\n\n- **3-я позиция:** вместо **Tree pose** стала бы **Corpse pose**  \n- **5-я позиция:** вместо **Corpse pose** стала бы **Tree pose**\n\nОстальные позиции остались бы без изменений:\n\n1. Mountain pose  \n2. Cat pose  \n3. Corpse pose  \n4. Cobra pose  \n5. Tree pose  \n\nЯ ничего не менял — это только описание возможного изменения.",
+      "commit_count": 0
+    },
+    {
+      "case": "repeated_name",
+      "request": "Поменяй местами Tree pose и Mountain pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В последовательности две позы **Tree pose** — на позиции 2 и позиции 3.  \n\nКакую из них поменять местами с **Mountain pose** на позиции 1: **Tree pose на позиции 2** или **Tree pose на позиции 3**?",
+      "commit_count": 0
+    },
+    {
+      "case": "ambiguous_pronoun",
+      "request": "Поменяй её местами с последней позой",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Уточните, пожалуйста, какую именно позу нужно поменять местами с последней?\n\nСейчас последняя поза — **5. Corpse pose**.  \nМожно написать, например: «Поменяй 3-ю с последней» или «Поменяй Tree pose с последней».",
+      "commit_count": 0
+    },
+    {
+      "case": "missing_second",
+      "request": "Поменяй местами третью позу",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "С какой позой поменять местами третью позу? Например: «поменяй местами третью и пятую».",
+      "commit_count": 0
+    },
+    {
+      "case": "out_of_range",
+      "request": "Поменяй третью и шестую позы местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В выбранной последовательности всего 5 поз, поэтому шестой позы нет.  \n\nМогу поменять местами третью позу с другой существующей позицией — например, с 1-й, 2-й, 4-й или 5-й.",
+      "commit_count": 0
+    },
+    {
+      "case": "no_selection",
+      "request": "Поменяй третью и пятую местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Не могу поменять третью и пятую позы, потому что сейчас не выбрана редактируемая последовательность.  \n\nВыберите или создайте последовательность, и я смогу выполнить обмен двух существующих поз местами.",
+      "commit_count": 0
+    },
+    {
+      "case": "multiple_swaps",
+      "request": "Поменяй первую и вторую, а также третью и пятую местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Могу выполнить только одну перестановку за один запрос. Какую сделать первой?\n\n1. Поменять местами 1-ю и 2-ю позы: Mountain pose ↔ Cat pose  \n2. Поменять местами 3-ю и 5-ю позы: Tree pose ↔ Corpse pose",
+      "commit_count": 0
+    },
+    {
+      "case": "swap_and_replace",
+      "request": "Поменяй третью и пятую местами и замени вторую на Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Могу выполнить только одно изменение за раз: либо поменять местами 3-ю и 5-ю позы, либо заменить 2-ю позу на Warrior pose.\n\nЧто сделать сначала?  \n1. Поменять местами 3-ю и 5-ю: Tree pose ↔ Corpse pose  \n2. Заменить 2-ю позу Cat pose на Warrior pose",
+      "commit_count": 0
+    },
+    {
+      "case": "same_occurrence",
+      "request": "Поменяй третью позу местами с третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "7f81d665-1f01-40b8-951d-6d9c7a815cc0",
+            "first_element_id": "0296bc70-fdb3-4e42-9558-eca0dfc7bb3d",
+            "second_element_id": "0296bc70-fdb3-4e42-9558-eca0dfc7bb3d"
+          },
+          "id": "call_XEu9QH0NdMHOJl0MQMuApVbT",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Это одна и та же поза — 3-я позиция (Tree pose). Последовательность не изменилась.",
+      "commit_count": 0
+    },
+    {
+      "case": "older_selection",
+      "request": "Поменяй первую и последнюю позы",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "ba0cf6d5-a731-433f-8e6a-2238fafc8c1b",
+            "first_element_id": "3199956f-abf8-44cf-a635-697f3e13a39d",
+            "second_element_id": "727d0590-be11-4698-b474-40d8c1fd4fd7"
+          },
+          "id": "call_RBISi3Uf1xOFOuzeDeGuIs3B",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: поменял местами первую и последнюю позы.\n\n- **Mountain pose** перемещена с позиции 1 на позицию 5.\n- **Corpse pose** перемещена с позиции 5 на позицию 1.",
+      "commit_count": 1
+    },
+    {
+      "case": "english_reply",
+      "request": "Swap the third and fifth poses",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "eb554ffe-8b76-4691-8bc5-283f6754266b",
+            "first_element_id": "03623c6f-ef64-4499-a3aa-925ab5162283",
+            "second_element_id": "1c743a9c-d6aa-4dba-9bbf-c27e15584ce8"
+          },
+          "id": "call_0Nqe3B6170koMIkWtxJj7fqM",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Swapped the third and fifth poses:\n\n- Tree pose moved from position 3 to position 5.\n- Corpse pose moved from position 5 to position 3.",
+      "commit_count": 1
+    },
+    {
+      "case": "duplicate_positions",
+      "request": "Поменяй вторую и третью позы местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "862cfa41-420f-45d2-b998-3e4debab03df",
+            "first_element_id": "f0a2ec12-e51a-4d34-b90b-1ae1c217d79c",
+            "second_element_id": "46b50653-4240-414d-8149-2c8e27f38c2a"
+          },
+          "id": "call_aFxQ94E8kr0DKtPF3Fl7Hl5p",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово: я поменял местами 2-ю и 3-ю позы.\n\n- Tree pose перемещена с позиции 2 на позицию 3.\n- Tree pose перемещена с позиции 3 на позицию 2.",
+      "commit_count": 1
+    }
+  ]
+}

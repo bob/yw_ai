@@ -1,0 +1,52 @@
+{
+  "info": {
+    "id": 0,
+    "uuid": "2bb08d7e-30e9-4135-8bd3-d286fe940212",
+    "name": "New Sequence",
+    "description": null,
+    "language": "en",
+    "elements_count": 5
+  },
+  "thumbnails": [
+    {
+      "uuid": "85fa76cd-8422-4246-ad4c-09e80065fc86",
+      "order": 1,
+      "image_url": "http://localhost:8517/pose.svg?pose=1",
+      "alt": "Mountain pose",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "cfcd1acc-7c25-4390-9bce-59f8c35cc8a1",
+      "order": 2,
+      "image_url": "http://localhost:8517/pose.svg?pose=2",
+      "alt": "Cat pose",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "61d58e20-7c2f-4b3e-a368-207b1583067b",
+      "order": 3,
+      "image_url": "http://localhost:8517/pose.svg?pose=5",
+      "alt": "Corpse pose",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "6a9ae134-3998-424a-a73b-89019cc1b2c2",
+      "order": 4,
+      "image_url": "http://localhost:8517/pose.svg?pose=4",
+      "alt": "Cobra pose",
+      "start_mirror": false,
+      "end_mirror": false
+    },
+    {
+      "uuid": "643fcacf-3732-41e5-a45b-e8537df13cef",
+      "order": 5,
+      "image_url": "http://localhost:8517/pose.svg?pose=3",
+      "alt": "Tree pose",
+      "start_mirror": true,
+      "end_mirror": true
+    }
+  ]
+}

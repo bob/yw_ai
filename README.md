@@ -7,7 +7,8 @@ type a request directly. After each response, the input is cleared and focused
 so you can immediately type the next request.
 Both paths use `AssistantAgent`, a single LangChain agent with tools in
 `langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
-`show_catalog_items`, `get_catalog_tag_names`, and `replace_sequence_element`. Generation still uses
+`show_catalog_items`, `get_catalog_tag_names`, `replace_sequence_element`, and
+`swap_sequence_elements`. Generation still uses
 the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
 tag queries, and text replies can run without generation. Both catalog endpoints
 always receive `language=en`; the assistant replies in the user's language and
@@ -28,7 +29,7 @@ candidates without changing a sequence. After searching, the assistant selects
 verified IDs with `show_catalog_items`; the selection appears as thumbnails after
 the reply, outside the progress panel. Its `catalog_items_displayed` event can
 arrive before the final text. Searching alone does not show a gallery.
-Generation, Regenerate, replacement, and technique answers keep their existing
+Generation, Regenerate, replacement, swapping, and technique answers keep their existing
 output unless catalog browsing is separately requested. Generate and Regenerate
 commands reject catalog display. Catalog thumbnails use the same size and styles
 as sequence thumbnails, with real names as alt text and a name fallback for
@@ -75,10 +76,20 @@ Stale variants, unverified candidates, unusable items, and duplicate poses are
 rejected. Failed searches clear previous candidates. Tools run sequentially, with
 at most one sequence change per request.
 
-The first release supports replacing one element per request. For multiple
-replacements, the assistant asks which element to change first. Adding, deleting,
-moving elements, and changing mirroring are planned extensions; their exact scope
-can change during review. The assistant explains that these edits are unavailable.
+Ask the assistant to swap two poses in the selected variant, for example
+“Swap the third and fifth poses” or “Swap the first and last poses.” Unique pose
+names also work; repeated names or an incomplete pair require clarification.
+The swap creates a new UUID in the same family and moves the complete occurrences,
+including their IDs and mirror flags. Other positions stay unchanged. Catalog
+search, generation, and TypeSafe are not needed. The original remains in history;
+Save sends the new variant, and Regenerate repeats its original generation request.
+Swapping an occurrence with itself returns `no_change`. See
+[feature 006: swap sequence elements](docs/specs/006-swap-sequence-elements/README.md).
+
+Each request supports one successful generation, one replacement, or one pair
+swap. For multiple edits or combined operations, the assistant asks which to do
+first. Adding, deleting, moving one element while shifting others, and changing
+mirroring independently are unavailable.
 
 Conversation history and variants live in one assistant's `InMemorySaver` in the
 current Streamlit session. Sessions do not share conversation state, and ordinary

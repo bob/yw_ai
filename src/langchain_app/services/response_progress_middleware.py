@@ -25,6 +25,7 @@ TOOL_STEPS = {
     "show_catalog_items": ("showing_catalog_items", "Showing catalog items..."),
     "generate_sequence": ("generating_sequence", "Generating sequence..."),
     "replace_sequence_element": ("updating_sequence", "Updating sequence..."),
+    "swap_sequence_elements": ("updating_sequence", "Swapping sequence elements..."),
 }
 
 
@@ -87,6 +88,8 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
     if message.status == "error" or payload.get("status") == "error":
         return "error", "Could not complete this tool call."
     if payload.get("status") == "no_change":
+        if tool_name == "swap_sequence_elements":
+            return "no_change", "Both references identify the same sequence element; no change was needed."
         return "no_change", "The selected item is already present; no change was needed."
     if tool_name == "get_catalog_tag_names":
         return "ok", f"Loaded {len(payload.get('tag_names', []))} catalog tags."
@@ -96,6 +99,8 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
         return "ok", f"Displayed {payload['displayed_count']} catalog items."
     if tool_name == "generate_sequence":
         return "ok", f"Sequence created with {payload['elements_count']} poses."
+    if tool_name == "swap_sequence_elements":
+        return "ok", "Sequence elements swapped."
     return "ok", "Sequence element replaced."
 
 

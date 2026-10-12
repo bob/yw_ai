@@ -11,7 +11,7 @@ from pydantic import Field
 
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.schemas.assistant import AssistantState
-from langchain_app.services.sequence_editor import SequenceEditorError, replace_element
+from langchain_app.services.sequence_editor import SequenceEditorError, replace_element, swap_elements
 from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS
 from langchain_app.tools.context import AssistantToolContext, tool_error
 
@@ -145,6 +145,70 @@ def replace_sequence_element(
                     "old_catalog_item": old_element.catalog_item.model_dump(mode="json"),
                     "new_catalog_item": new_element.catalog_item.model_dump(mode="json"),
                 },
+            }, ensure_ascii=False),
+            tool_call_id=runtime.tool_call_id or "",
+        )],
+    })
+
+
+@tool
+def swap_sequence_elements(
+    sequence_uuid: UUID,
+    first_element_id: UUID,
+    second_element_id: UUID,
+    runtime: ToolRuntime[AssistantToolContext, AssistantState],
+) -> Command | ToolMessage:
+    """Swap two existing occurrences in the selected sequence, creating a new variant.
+
+    Resolve both occurrences using UUIDs from the current selected snapshot,
+    never catalog IDs or positions. Clarify ambiguous references before calling.
+    Call when the user asks to apply the swap. Swap one pair per user request;
+    this consumes the same operation limit as generation or replacement.
+    Whole occurrences move with their catalog items and mirror flags.
+    Catalog search and regeneration are not needed for this operation.
+    """
+    context = runtime.context
+    if context.require_generation:
+        return tool_error(runtime, "generation_required", "This application command requires generate_sequence")
+    if context.generation_started or runtime.state.get("turn_operation_committed", False):
+        return tool_error(runtime, "operation_already_started", "Change at most one sequence per request")
+    active_uuid = runtime.state.get("active_sequence_uuid")
+    sequences = runtime.state.get("sequences", {})
+    snapshot = sequences.get(active_uuid) if active_uuid is not None else None
+    if snapshot is None:
+        return tool_error(runtime, "sequence_not_found", "Swapping requires a selected sequence.")
+    source = GeneratedSequence.from_snapshot(snapshot)
+    if sequence_uuid != source.uuid:
+        return tool_error(runtime, "stale_sequence", "Use the UUID of the currently selected sequence")
+    try:
+        variant = swap_elements(
+            source, first_element_id=first_element_id, second_element_id=second_element_id,
+            request=context.user_request,
+        )
+    except SequenceEditorError as exc:
+        return tool_error(runtime, exc.code, str(exc))
+    if variant is None:
+        return ToolMessage(
+            content=json.dumps({"status": "no_change", "uuid": str(source.uuid)}),
+            tool_call_id=runtime.tool_call_id or "",
+        )
+    snapshot = variant.model_dump(mode="json")
+    old_orders = {item.element_id: item.order for item in source.elements}
+    new_orders = {item.element_id: item.order for item in variant.elements}
+    return Command(update={
+        "sequences": {str(variant.uuid): snapshot},
+        "active_sequence_uuid": str(variant.uuid),
+        "turn_operation_committed": True,
+        "messages": [ToolMessage(
+            content=json.dumps({
+                "status": "ok", **snapshot,
+                "swap": [
+                    {
+                        "element_id": str(element_id),
+                        "old_order": old_orders[element_id], "new_order": new_orders[element_id],
+                    }
+                    for element_id in (first_element_id, second_element_id)
+                ],
             }, ensure_ascii=False),
             tool_call_id=runtime.tool_call_id or "",
         )],

@@ -17,6 +17,7 @@ from langchain_app.schemas import CatalogItemSchema
 from langchain_app.services.sequence_generator import SequenceGenerator
 from test_assistant_agent import tool_call
 from test_sequence_replacement import catalog_pose, replacement_call
+from test_sequence_swap import swap_call
 
 APP = Path(__file__).resolve().parents[1] / "src/langchain_app/assistant.py"
 
@@ -54,6 +55,13 @@ class ErrorAfterGenerationModel(ToolCallingModel):
 class ErrorAfterReplacementModel(ToolCallingModel):
     def _generate(self, messages, **kwargs):
         if isinstance(messages[-1], ToolMessage) and messages[-1].name == "replace_sequence_element":
+            raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
+        return super()._generate(messages, **kwargs)
+
+
+class ErrorAfterSwapModel(ToolCallingModel):
+    def _generate(self, messages, **kwargs):
+        if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
             raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
         return super()._generate(messages, **kwargs)
 
@@ -530,3 +538,195 @@ class SequenceVariantTests(unittest.TestCase):
             self.assertEqual(update.outcome, "no_change")
             self.assertEqual(len(service.state["sequences"]), 1)
             self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+
+    def test_swap_card_replays_progress_history_and_save_with_moved_mirror_flags(self):
+        generator = Mock()
+        generator.generate.return_value = [catalog_pose(n, bilateral=n == 5) for n in range(1, 6)]
+        model = tool_model()
+        save = Mock()
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ), patch("langchain_app.ui.sequence_import._save_component", return_value=save):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            model.responses = [swap_call(source), AIMessage(content="Поменяла третью и пятую позы местами.")]
+            app.chat_input[0].set_value("Поменяй третью и пятую местами").run()
+            self.assertFalse(app.exception)
+            self.assertFalse(app.error)
+            variant = service.get_sequence(service.active_sequence_uuid)
+            variant_uuid = str(variant.uuid)
+            message = app.session_state.messages[-1]
+            execution = message["execution"]
+            self.assertEqual(execution.sequence_uuid, variant.uuid)
+            self.assertEqual(execution.source_sequence_uuid, source.uuid)
+            update = next(step for step in execution.steps if step.code == "updating_sequence")
+            self.assertEqual((update.title, update.outcome, update.summary), (
+                "Swapping sequence elements...", "ok", "Sequence elements swapped.",
+            ))
+            self.assertTrue(any("Sequence elements swapped." in element.value for element in app.markdown))
+            self.assertEqual(message["sequence_uuid"], variant_uuid)
+            self.assertEqual(message["sequence_variant_uuids"], [str(source.uuid), variant_uuid])
+            self.assertEqual(message["selected_sequence_index"], 1)
+            self.assertEqual(message["content"], "Поменяла третью и пятую позы местами.")
+            self.assertEqual(message["sequence_request"], source.generation_request)
+            saved = save.call_args.kwargs["data"]["sequence"]
+            self.assertEqual(saved, message["sequence"])
+            self.assertEqual(saved["info"]["uuid"], variant_uuid)
+            moved = [source.elements[index] for index in (0, 1, 4, 3, 2)]
+            self.assertEqual([item["alt"] for item in saved["thumbnails"]], [element.catalog_item.name for element in moved])
+            self.assertEqual([item["uuid"] for item in saved["thumbnails"]], [element.catalog_item.uuid for element in moved])
+            self.assertEqual([item["order"] for item in saved["thumbnails"]], [1, 2, 3, 4, 5])
+            self.assertEqual([item["start_mirror"] for item in saved["thumbnails"]], [element.start_mirror for element in moved])
+            self.assertEqual([item["end_mirror"] for item in saved["thumbnails"]], [element.end_mirror for element in moved])
+            calls_before_navigation = len(model.received_messages)
+            app.button(key="assistant-sequence-3-previous").click().run()
+            self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+            self.assertEqual(save.call_args.kwargs["data"]["sequence"]["info"]["uuid"], str(source.uuid))
+            self.assertEqual([item["alt"] for item in app.session_state.messages[-1]["sequence"]["thumbnails"]],
+                             [element.catalog_item.name for element in source.elements])
+            app.button(key="assistant-sequence-3-next").click().run()
+            app.session_state.messages[-1]["sequence_variants"] = []
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.session_state.messages[-1]["sequence_uuid"], variant_uuid)
+            self.assertEqual(app.session_state.messages[-1]["execution"], execution)
+            self.assertEqual(save.call_args.kwargs["data"]["sequence"], saved)
+            self.assertEqual(len(model.received_messages), calls_before_navigation)
+            self.assertEqual(service.get_sequence(str(source.uuid)), source)
+            self.assertEqual(len(service.state["sequences"]), 2)
+            generator.generate.assert_called_once()
+
+    def test_regenerate_swap_uses_original_request_without_repeating_the_swap(self):
+        request = "Generate a yoga sequence with 5 poses for balance."
+        generator = Mock()
+        generator.generate.side_effect = [
+            [catalog_pose(n, bilateral=n == 5) for n in range(1, 6)],
+            [catalog_pose(n) for n in range(6, 11)],
+        ]
+        model = tool_model(request, count=5)
+        save = Mock()
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ), patch("langchain_app.ui.sequence_import._save_component", return_value=save):
+            app = AppTest.from_file(str(APP)).run()
+            app.chat_input[0].set_value(request).run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            model.responses = [swap_call(source), AIMessage(content="Поменяла третью и пятую позы местами.")]
+            app.chat_input[0].set_value("Поменяй третью и пятую местами").run()
+            self.assertFalse(app.exception)
+            swapped = service.get_sequence(service.active_sequence_uuid)
+            swapped_message = app.session_state.messages[-1]
+            swapped_execution = swapped_message["execution"].model_copy(deep=True)
+            model.responses = [tool_model(request, count=5).responses[0], AIMessage(content="Regenerated")]
+            app.button(key="assistant-sequence-3-regenerate").click().run()
+            self.assertFalse(app.exception)
+            self.assertFalse(app.error)
+            regenerated = service.get_sequence(service.active_sequence_uuid)
+            self.assertEqual(regenerated.operation, "regenerate")
+            self.assertEqual(regenerated.parent_uuid, swapped.uuid)
+            self.assertEqual(regenerated.family_uuid, source.family_uuid)
+            self.assertEqual(regenerated.generation_request, request)
+            self.assertEqual(regenerated.operation_request, request)
+            self.assertEqual(model.received_requests, [request, "Поменяй третью и пятую местами", request])
+            self.assertEqual(selected_snapshot(model, -2)["uuid"], str(swapped.uuid))
+            self.assertEqual([element.catalog_item.id for element in regenerated.elements], list(range(6, 11)))
+            self.assertEqual(service.get_sequence(str(source.uuid)), source)
+            self.assertEqual(service.get_sequence(str(swapped.uuid)), swapped)
+            self.assertEqual(len(service.state["sequences"]), 3)
+            self.assertEqual(swapped_message["execution_history"], [swapped_execution])
+            self.assertEqual(swapped_message["sequence_variant_uuids"], [
+                str(source.uuid), str(swapped.uuid), str(regenerated.uuid),
+            ])
+            saved = save.call_args.kwargs["data"]["sequence"]
+            self.assertEqual(saved["info"]["uuid"], str(regenerated.uuid))
+            self.assertEqual([item["alt"] for item in saved["thumbnails"]], [f"Pose {n}" for n in range(6, 11)])
+            generator.generate.assert_called_with(
+                request, language="en", count=5, starting_catalog_item_id=None, progress_observer=ANY,
+            )
+            self.assertEqual(generator.generate.call_count, 2)
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(service.active_sequence_uuid, str(regenerated.uuid))
+            self.assertEqual(len(model.received_requests), 3)
+
+    def test_committed_swap_retains_progress_card_and_save_when_final_reply_fails(self):
+        generator = Mock()
+        generator.generate.return_value = [catalog_pose(n) for n in range(1, 6)]
+        model = ErrorAfterSwapModel(responses=tool_model().responses)
+        save = Mock()
+        with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+            "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+        ), patch("langchain_app.ui.sequence_import._save_component", return_value=save):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            service = app.session_state.assistant_agent
+            source = service.get_sequence(service.active_sequence_uuid)
+            model.responses = [swap_call(source)]
+            app.chat_input[0].set_value("Swap third and fifth").run()
+            self.assertFalse(app.exception)
+            self.assertEqual(len(app.error), 1)
+            variant_uuid = service.active_sequence_uuid
+            self.assertNotEqual(variant_uuid, str(source.uuid))
+            message = app.session_state.messages[-1]
+            execution = message["execution"]
+            self.assertEqual(execution.outcome, "error")
+            self.assertEqual(str(execution.sequence_uuid), variant_uuid)
+            update = next(step for step in execution.steps if step.code == "updating_sequence")
+            self.assertEqual((update.outcome, update.summary), ("ok", "Sequence elements swapped."))
+            self.assertEqual(message["sequence_uuid"], variant_uuid)
+            saved = save.call_args.kwargs["data"]["sequence"]
+            self.assertEqual(saved["info"]["uuid"], variant_uuid)
+            self.assertEqual([item["alt"] for item in saved["thumbnails"]], ["Pose 1", "Pose 2", "Pose 5", "Pose 4", "Pose 3"])
+            calls_before_rerun = len(model.received_messages)
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(len(app.error), 1)
+            self.assertEqual(app.session_state.messages[-1]["execution"], execution)
+            self.assertEqual(service.active_sequence_uuid, variant_uuid)
+            self.assertEqual(save.call_args.kwargs["data"]["sequence"], saved)
+            self.assertEqual(len(model.received_messages), calls_before_rerun)
+            self.assertEqual(len(service.state["sequences"]), 2)
+            generator.generate.assert_called_once()
+
+    def test_no_change_and_failed_swaps_replay_progress_without_a_new_sequence_card(self):
+        for outcome in ("no_change", "error"):
+            with self.subTest(outcome=outcome):
+                generator = Mock()
+                generator.generate.return_value = [catalog_pose(n) for n in range(1, 6)]
+                model = tool_model()
+                with patch("langchain_app.dependencies.get_sequence_generator", return_value=generator), patch(
+                    "langchain_app.services.assistant_agent.init_chat_model", return_value=model,
+                ):
+                    app = AppTest.from_file(str(APP)).run()
+                    app.button(key="generate-sequence").click().run()
+                    service = app.session_state.assistant_agent
+                    source = service.get_sequence(service.active_sequence_uuid)
+                    second_id = str(source.elements[2].element_id) if outcome == "no_change" else str(uuid4())
+                    model.responses = [swap_call(source, second_element_id=second_id), AIMessage(content="No swap applied.")]
+                    app.chat_input[0].set_value("Swap the pair").run()
+                    self.assertFalse(app.exception)
+                    self.assertFalse(app.error)
+                    message = app.session_state.messages[-1]
+                    self.assertIsNone(message["sequence"])
+                    self.assertIsNone(message["sequence_uuid"])
+                    self.assertEqual(message["sequence_variant_uuids"], [])
+                    execution = message["execution"]
+                    self.assertEqual(execution.outcome, "complete")
+                    self.assertIsNone(execution.sequence_uuid)
+                    update = next(step for step in execution.steps if step.code == "updating_sequence")
+                    self.assertEqual(update.title, "Swapping sequence elements...")
+                    self.assertEqual(update.outcome, outcome)
+                    if outcome == "no_change":
+                        self.assertEqual(update.summary, "Both references identify the same sequence element; no change was needed.")
+                    calls_before_rerun = len(model.received_messages)
+                    app.run()
+                    self.assertFalse(app.exception)
+                    self.assertEqual(app.session_state.messages[-1]["execution"], execution)
+                    self.assertIsNone(app.session_state.messages[-1]["sequence"])
+                    self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                    self.assertEqual(len(service.state["sequences"]), 1)
+                    self.assertEqual(len(model.received_messages), calls_before_rerun)
+                    generator.generate.assert_called_once()
