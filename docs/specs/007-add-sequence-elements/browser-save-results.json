@@ -1,0 +1,410 @@
+{
+  "passed": true,
+  "new_variant_save_count": 2,
+  "original_variant_save_count": 1,
+  "repeat_payload_equal": true,
+  "rerun_tool_names": [
+    "generate_sequence",
+    "add_sequence_elements"
+  ],
+  "state": {
+    "sequences": {
+      "0e88ec9e-adc9-461a-9ea8-9a3797ce23df": {
+        "uuid": "0e88ec9e-adc9-461a-9ea8-9a3797ce23df",
+        "family_uuid": "ac904e49-7f0d-4359-90f3-0d7fd9e4c1b7",
+        "parent_uuid": null,
+        "operation": "generate",
+        "generation_request": "Generate a yoga sequence with 5 poses.",
+        "operation_request": "Generate a yoga sequence with 5 poses.",
+        "name": "New Sequence",
+        "description": null,
+        "language": "en",
+        "elements": [
+          {
+            "element_id": "4c44d0a8-89b3-44b6-b03f-39aa566277c3",
+            "order": 1,
+            "catalog_item": {
+              "id": 1,
+              "uuid": "faa78a20-89f6-415a-8ba7-afff2129b6c5",
+              "name": "Mountain pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=1",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "7a9cc03f-18e0-4207-b327-15616ceffe9c",
+            "order": 2,
+            "catalog_item": {
+              "id": 2,
+              "uuid": "dce2ea97-1cc4-46e3-a628-a33445c43b99",
+              "name": "Cat pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=2",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "27310e6f-a851-430a-acb9-6d90b1136682",
+            "order": 3,
+            "catalog_item": {
+              "id": 3,
+              "uuid": "c4eb14f5-77c8-442e-ada5-79e7cda62de3",
+              "name": "Tree pose",
+              "bilateral": true,
+              "image_url": "http://localhost:8519/pose.svg?pose=3",
+              "catalog_tag_names": []
+            },
+            "start_mirror": true,
+            "end_mirror": true
+          },
+          {
+            "element_id": "55b02c66-cd71-4619-861b-9b2ff88961b0",
+            "order": 4,
+            "catalog_item": {
+              "id": 4,
+              "uuid": "7071b95c-a038-4aa0-80d8-8cca038436b1",
+              "name": "Cobra pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=4",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "8fe2cd69-31bf-42a1-a897-ddd595fd3e27",
+            "order": 5,
+            "catalog_item": {
+              "id": 5,
+              "uuid": "29b287a3-2d51-498a-8a58-0dbace094c8b",
+              "name": "Corpse pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=5",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          }
+        ],
+        "elements_count": 5
+      },
+      "50e130a9-39e8-47fb-a870-f3d76c290e2f": {
+        "uuid": "50e130a9-39e8-47fb-a870-f3d76c290e2f",
+        "family_uuid": "ac904e49-7f0d-4359-90f3-0d7fd9e4c1b7",
+        "parent_uuid": "0e88ec9e-adc9-461a-9ea8-9a3797ce23df",
+        "operation": "add",
+        "generation_request": "Generate a yoga sequence with 5 poses.",
+        "operation_request": "Добавь две асаны перед третьей",
+        "name": "New Sequence",
+        "description": null,
+        "language": "en",
+        "elements": [
+          {
+            "element_id": "4c44d0a8-89b3-44b6-b03f-39aa566277c3",
+            "order": 1,
+            "catalog_item": {
+              "id": 1,
+              "uuid": "faa78a20-89f6-415a-8ba7-afff2129b6c5",
+              "name": "Mountain pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=1",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "7a9cc03f-18e0-4207-b327-15616ceffe9c",
+            "order": 2,
+            "catalog_item": {
+              "id": 2,
+              "uuid": "dce2ea97-1cc4-46e3-a628-a33445c43b99",
+              "name": "Cat pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=2",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "ac004965-132a-42e5-aa38-c8bc73176c02",
+            "order": 3,
+            "catalog_item": {
+              "id": 6,
+              "uuid": "943bb111-5084-44f6-9d47-66772a7ef37a",
+              "name": "Warrior pose",
+              "bilateral": true,
+              "image_url": "http://localhost:8519/pose.svg?pose=6",
+              "catalog_tag_names": []
+            },
+            "start_mirror": true,
+            "end_mirror": true
+          },
+          {
+            "element_id": "50cc014e-5e48-4812-bd1d-9bdabb3d46cf",
+            "order": 4,
+            "catalog_item": {
+              "id": 7,
+              "uuid": "442460d0-1280-49e5-80dc-adf4ddc5c728",
+              "name": "Seated forward bend",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=7",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "27310e6f-a851-430a-acb9-6d90b1136682",
+            "order": 5,
+            "catalog_item": {
+              "id": 3,
+              "uuid": "c4eb14f5-77c8-442e-ada5-79e7cda62de3",
+              "name": "Tree pose",
+              "bilateral": true,
+              "image_url": "http://localhost:8519/pose.svg?pose=3",
+              "catalog_tag_names": []
+            },
+            "start_mirror": true,
+            "end_mirror": true
+          },
+          {
+            "element_id": "55b02c66-cd71-4619-861b-9b2ff88961b0",
+            "order": 6,
+            "catalog_item": {
+              "id": 4,
+              "uuid": "7071b95c-a038-4aa0-80d8-8cca038436b1",
+              "name": "Cobra pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=4",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          },
+          {
+            "element_id": "8fe2cd69-31bf-42a1-a897-ddd595fd3e27",
+            "order": 7,
+            "catalog_item": {
+              "id": 5,
+              "uuid": "29b287a3-2d51-498a-8a58-0dbace094c8b",
+              "name": "Corpse pose",
+              "bilateral": false,
+              "image_url": "http://localhost:8519/pose.svg?pose=5",
+              "catalog_tag_names": []
+            },
+            "start_mirror": false,
+            "end_mirror": false
+          }
+        ],
+        "elements_count": 7
+      }
+    },
+    "active_sequence_uuid": "50e130a9-39e8-47fb-a870-f3d76c290e2f",
+    "requests": [
+      "Generate a yoga sequence with 5 poses.",
+      "Добавь две асаны перед третьей"
+    ],
+    "tool_names": [
+      "generate_sequence",
+      "add_sequence_elements"
+    ]
+  },
+  "payloads": [
+    {
+      "info": {
+        "id": 0,
+        "uuid": "50e130a9-39e8-47fb-a870-f3d76c290e2f",
+        "name": "New Sequence",
+        "description": null,
+        "language": "en",
+        "elements_count": 7
+      },
+      "thumbnails": [
+        {
+          "uuid": "faa78a20-89f6-415a-8ba7-afff2129b6c5",
+          "order": 1,
+          "image_url": "http://localhost:8519/pose.svg?pose=1",
+          "alt": "Mountain pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "dce2ea97-1cc4-46e3-a628-a33445c43b99",
+          "order": 2,
+          "image_url": "http://localhost:8519/pose.svg?pose=2",
+          "alt": "Cat pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "943bb111-5084-44f6-9d47-66772a7ef37a",
+          "order": 3,
+          "image_url": "http://localhost:8519/pose.svg?pose=6",
+          "alt": "Warrior pose",
+          "start_mirror": true,
+          "end_mirror": true
+        },
+        {
+          "uuid": "442460d0-1280-49e5-80dc-adf4ddc5c728",
+          "order": 4,
+          "image_url": "http://localhost:8519/pose.svg?pose=7",
+          "alt": "Seated forward bend",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "c4eb14f5-77c8-442e-ada5-79e7cda62de3",
+          "order": 5,
+          "image_url": "http://localhost:8519/pose.svg?pose=3",
+          "alt": "Tree pose",
+          "start_mirror": true,
+          "end_mirror": true
+        },
+        {
+          "uuid": "7071b95c-a038-4aa0-80d8-8cca038436b1",
+          "order": 6,
+          "image_url": "http://localhost:8519/pose.svg?pose=4",
+          "alt": "Cobra pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "29b287a3-2d51-498a-8a58-0dbace094c8b",
+          "order": 7,
+          "image_url": "http://localhost:8519/pose.svg?pose=5",
+          "alt": "Corpse pose",
+          "start_mirror": false,
+          "end_mirror": false
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": 0,
+        "uuid": "0e88ec9e-adc9-461a-9ea8-9a3797ce23df",
+        "name": "New Sequence",
+        "description": null,
+        "language": "en",
+        "elements_count": 5
+      },
+      "thumbnails": [
+        {
+          "uuid": "faa78a20-89f6-415a-8ba7-afff2129b6c5",
+          "order": 1,
+          "image_url": "http://localhost:8519/pose.svg?pose=1",
+          "alt": "Mountain pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "dce2ea97-1cc4-46e3-a628-a33445c43b99",
+          "order": 2,
+          "image_url": "http://localhost:8519/pose.svg?pose=2",
+          "alt": "Cat pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "c4eb14f5-77c8-442e-ada5-79e7cda62de3",
+          "order": 3,
+          "image_url": "http://localhost:8519/pose.svg?pose=3",
+          "alt": "Tree pose",
+          "start_mirror": true,
+          "end_mirror": true
+        },
+        {
+          "uuid": "7071b95c-a038-4aa0-80d8-8cca038436b1",
+          "order": 4,
+          "image_url": "http://localhost:8519/pose.svg?pose=4",
+          "alt": "Cobra pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "29b287a3-2d51-498a-8a58-0dbace094c8b",
+          "order": 5,
+          "image_url": "http://localhost:8519/pose.svg?pose=5",
+          "alt": "Corpse pose",
+          "start_mirror": false,
+          "end_mirror": false
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": 0,
+        "uuid": "50e130a9-39e8-47fb-a870-f3d76c290e2f",
+        "name": "New Sequence",
+        "description": null,
+        "language": "en",
+        "elements_count": 7
+      },
+      "thumbnails": [
+        {
+          "uuid": "faa78a20-89f6-415a-8ba7-afff2129b6c5",
+          "order": 1,
+          "image_url": "http://localhost:8519/pose.svg?pose=1",
+          "alt": "Mountain pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "dce2ea97-1cc4-46e3-a628-a33445c43b99",
+          "order": 2,
+          "image_url": "http://localhost:8519/pose.svg?pose=2",
+          "alt": "Cat pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "943bb111-5084-44f6-9d47-66772a7ef37a",
+          "order": 3,
+          "image_url": "http://localhost:8519/pose.svg?pose=6",
+          "alt": "Warrior pose",
+          "start_mirror": true,
+          "end_mirror": true
+        },
+        {
+          "uuid": "442460d0-1280-49e5-80dc-adf4ddc5c728",
+          "order": 4,
+          "image_url": "http://localhost:8519/pose.svg?pose=7",
+          "alt": "Seated forward bend",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "c4eb14f5-77c8-442e-ada5-79e7cda62de3",
+          "order": 5,
+          "image_url": "http://localhost:8519/pose.svg?pose=3",
+          "alt": "Tree pose",
+          "start_mirror": true,
+          "end_mirror": true
+        },
+        {
+          "uuid": "7071b95c-a038-4aa0-80d8-8cca038436b1",
+          "order": 6,
+          "image_url": "http://localhost:8519/pose.svg?pose=4",
+          "alt": "Cobra pose",
+          "start_mirror": false,
+          "end_mirror": false
+        },
+        {
+          "uuid": "29b287a3-2d51-498a-8a58-0dbace094c8b",
+          "order": 7,
+          "image_url": "http://localhost:8519/pose.svg?pose=5",
+          "alt": "Corpse pose",
+          "start_mirror": false,
+          "end_mirror": false
+        }
+      ]
+    }
+  ],
+  "scope": "Local browser handoff; no write to the external catalog"
+}

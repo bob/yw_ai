@@ -21,6 +21,7 @@ from langchain_app.services import (
 from langchain_app.schemas.response_progress import (
     CatalogItemsDisplayedEvent, SequenceCommittedEvent, SequenceElementEvent,
 )
+from langchain_app.services.request_errors import public_request_error
 from langchain_app.ui.catalog_items import CatalogItemsRenderer
 from langchain_app.ui.response_progress import (
     PendingResponse, ResponseProgressRenderer, enqueue_regeneration, render_execution,
@@ -323,10 +324,13 @@ class SequenceRenderer:
                         sequence = generated_sequence_view(committed)
                         with sequence_output.container():
                             self.render(sequence, key=f"{key}-{event.event_index}")
-            except Exception:
+            except Exception as exc:
                 # The producer normally emitted its terminal error already.
                 # Dependency initialization failures have no stream to close.
-                progress.execution.fail(max(0.0, monotonic() - pending.accepted_at))
+                progress.execution.fail(
+                    max(0.0, monotonic() - pending.accepted_at),
+                    error_message=public_request_error(exc),
+                )
             execution = progress.finish()
             if sequence is None:
                 sequence_output.empty()

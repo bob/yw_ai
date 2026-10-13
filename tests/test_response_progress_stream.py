@@ -12,9 +12,12 @@ from pydantic import TypeAdapter
 from langchain_app.schemas import CatalogItemSchema, CatalogItemsDisplayedEvent, ResponseEvent
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
-from langchain_app.services.sequence_editor import swap_elements
+from langchain_app.services.sequence_editor import insert_elements, swap_elements
 from langchain_app.services.sequence_generator import SequenceGenerator
+from langchain_app.services.type_safe import TypeSafeSelectionError
 from test_assistant_agent import ToolCallingModel, assistant, pose, tool_call, tool_model
+from test_sequence_addition_tool import addition_call
+from test_sequence_insertion import pose as addition_pose, source as addition_source
 from test_sequence_swap import sequence, swap_call
 
 
@@ -366,6 +369,139 @@ class ResponseProgressStreamTests(unittest.TestCase):
         self.assertEqual([e.completed for e in events if e.type == "step_progress"], [0, 0, 1, 2])
         self.assertEqual(len([e for e in events if e.type == "sequence_committed"]), 1)
         self.assertFalse(any(e.type == "catalog_items_displayed" for e in events))
+
+    def addition_service(self, count=5):
+        source = addition_source(count)
+        catalog, selector = Mock(), Mock()
+        catalog.search.return_value = [addition_pose(n) for n in range(100, 150)]
+        selector.choose_addition_catalog_item.side_effect = lambda candidates, **kwargs: candidates[0]
+        generator = SequenceGenerator(catalog, selector)
+        model = ToolCallingModel(responses=[AIMessage(content="Ready")])
+        service = assistant(lambda: generator, model=model)
+        service._get_agent().update_state(service._config, {
+            "sequences": {str(source.uuid): source.model_dump(mode="json")},
+            "active_sequence_uuid": str(source.uuid),
+        })
+        return service, source, model, catalog, selector
+
+    def test_addition_progress_is_live_and_commit_confirms_the_entire_inserted_block(self):
+        service, source, model, catalog, selector = self.addition_service()
+        search_gate, first_gate, second_gate, commit_gate, reply_gate = [self.gate() for _ in range(5)]
+        catalog.search.return_value = [addition_pose(100), addition_pose(101)]
+        catalog.search.side_effect = lambda **kwargs: (self.wait(search_gate), catalog.search.return_value)[1]
+
+        def choose(candidates, **kwargs):
+            self.wait(second_gate if kwargs["selected_additions"] else first_gate)
+            return min(candidates, key=lambda item: item.id)
+
+        selector.choose_addition_catalog_item.side_effect = choose
+        model.responses = [addition_call(source, count=2, insert_before_element_id=str(source.elements[2].element_id)),
+                           AIMessage(content="Added two poses before the third.")]
+        original = ToolCallingModel._generate
+
+        def reply(model_instance, messages, **kwargs):
+            if isinstance(messages[-1], ToolMessage):
+                self.wait(reply_gate)
+            return original(model_instance, messages, **kwargs)
+
+        def commit(*args, **kwargs):
+            self.wait(commit_gate)
+            return insert_elements(*args, **kwargs)
+
+        events = []
+        with patch.object(ToolCallingModel, "_generate", new=reply), patch(
+            "langchain_app.tools.sequence.insert_elements", side_effect=commit,
+        ):
+            for event in service.stream_response_events("Add two before the third"):
+                events.append(event)
+                if event.type == "step_started" and event.code == "searching_catalog_items":
+                    self.assertIsNotNone(event.parent_step_id)
+                    search_gate.set()
+                elif event.type == "step_progress":
+                    self.assertEqual(event.total, 2)
+                    self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                    self.assertEqual(len(service.state["sequences"]), 1)
+                    if event.completed == 0:
+                        first_gate.set()
+                    elif event.completed == 1:
+                        second_gate.set()
+                    elif event.completed == 2:
+                        commit_gate.set()
+                elif event.type == "sequence_committed":
+                    variant = service.get_sequence(str(event.sequence_uuid))
+                    self.assertEqual([e.catalog_item.id for e in variant.elements], [1, 2, 100, 101, 3, 4, 5])
+                    self.assertEqual(service.active_sequence_uuid, str(variant.uuid))
+                    reply_gate.set()
+        self.assert_lifecycle(events)
+        update = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+        self.assertEqual(update.title, "Adding sequence elements...")
+        progress = [e for e in events if e.type == "step_progress"]
+        self.assertEqual([e.completed for e in progress], [0, 0, 1, 2])
+        self.assertTrue(all(e.step_id == update.step_id and e.tool_call_id == update.tool_call_id for e in progress))
+        committed = next(e for e in events if e.type == "sequence_committed")
+        self.assertEqual(committed.step_id, update.step_id)
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == update.step_id)
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Added 2 sequence elements; 7 poses in total."))
+        self.assertLess(events.index(committed), events.index(finish))
+        self.assertEqual(sum(e.type == "sequence_committed" for e in events), 1)
+        self.assertFalse(any(e.type in ("sequence_element", "catalog_items_displayed") for e in events))
+        self.assertEqual(service.get_sequence(str(source.uuid)), source)
+
+    def test_addition_progress_total_uses_free_space_and_summary_explains_the_limit(self):
+        service, source, model, _, _ = self.addition_service(count=43)
+        model.responses = [addition_call(source, count=100), AIMessage(content="Added two; limit 45.")]
+        events = list(service.stream_response_events("Add 100"))
+        self.assert_lifecycle(events)
+        self.assertEqual([e.total for e in events if e.type == "step_progress"], [2, 2, 2, 2])
+        finish = next(e for e in events if e.type == "step_finished" and "Added 2" in e.summary)
+        self.assertIn("45 poses in total", finish.summary)
+        self.assertIn("requested 100 additions", finish.summary)
+        self.assertEqual(service.get_sequence(service.active_sequence_uuid).elements_count, 45)
+
+    def test_addition_errors_and_no_change_finish_without_commit_or_preview(self):
+        for mode in ("full", "catalog", "selection", "invalid"):
+            with self.subTest(mode=mode):
+                service, source, model, catalog, selector = self.addition_service(count=45 if mode == "full" else 5)
+                if mode == "catalog":
+                    catalog.search.side_effect = CatalogItemApiError("offline")
+                elif mode == "selection":
+                    selector.choose_addition_catalog_item.side_effect = [addition_pose(100), TypeSafeSelectionError("offline")]
+                model.responses = [addition_call(source, count=2, **(
+                    {"insert_before_element_id": str(uuid4())} if mode == "invalid" else {}
+                )), AIMessage(content="No addition applied.")]
+                events = list(service.stream_response_events("Add two"))
+                self.assert_lifecycle(events)
+                self.assertFalse(any(e.type in ("sequence_committed", "sequence_element", "catalog_items_displayed") for e in events))
+                self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                self.assertEqual(len(service.state["sequences"]), 1)
+                update = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+                finish = next(e for e in events if e.type == "step_finished" and e.step_id == update.step_id)
+                self.assertEqual(finish.outcome, "no_change" if mode == "full" else "error")
+                if mode == "full":
+                    self.assertIn("45-element limit", finish.summary)
+                if mode in ("full", "invalid"):
+                    catalog.search.assert_not_called()
+                    self.assertFalse(any(e.type == "step_progress" for e in events))
+                if mode == "selection":
+                    self.assertEqual([e.completed for e in events if e.type == "step_progress"], [0, 0, 1])
+
+    def test_addition_commit_survives_a_failure_of_the_final_model_call(self):
+        service, source, model, _, _ = self.addition_service()
+        model.responses = [addition_call(source, count=2)]
+        original = ToolCallingModel._generate
+
+        def fail_reply(model_instance, messages, **kwargs):
+            if isinstance(messages[-1], ToolMessage):
+                raise AssistantAgentError("Model unavailable")
+            return original(model_instance, messages, **kwargs)
+
+        events = []
+        with patch.object(ToolCallingModel, "_generate", new=fail_reply), self.assertRaises(AssistantAgentError):
+            events.extend(service.stream_response_events("Add two"))
+        self.assert_lifecycle(events, outcome="error")
+        self.assertEqual(sum(e.type == "sequence_committed" for e in events), 1)
+        variant = service.get_sequence(service.active_sequence_uuid)
+        self.assertEqual((variant.operation, variant.parent_uuid, variant.elements_count), ("add", source.uuid, 7))
 
     def test_intermediate_and_final_text_exclude_reasoning_arguments_and_tool_payload(self):
         intermediate = tool_call("search_catalog_items", name="secret arguments")

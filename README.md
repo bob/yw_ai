@@ -7,8 +7,8 @@ type a request directly. After each response, the input is cleared and focused
 so you can immediately type the next request.
 Both paths use `AssistantAgent`, a single LangChain agent with tools in
 `langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
-`show_catalog_items`, `get_catalog_tag_names`, `replace_sequence_element`, and
-`swap_sequence_elements`. Generation still uses
+`show_catalog_items`, `get_catalog_tag_names`, `replace_sequence_element`,
+`swap_sequence_elements`, and `add_sequence_elements`. Generation still uses
 the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
 tag queries, and text replies can run without generation. Both catalog endpoints
 always receive `language=en`; the assistant replies in the user's language and
@@ -29,7 +29,7 @@ candidates without changing a sequence. After searching, the assistant selects
 verified IDs with `show_catalog_items`; the selection appears as thumbnails after
 the reply, outside the progress panel. Its `catalog_items_displayed` event can
 arrive before the final text. Searching alone does not show a gallery.
-Generation, Regenerate, replacement, swapping, and technique answers keep their existing
+Generation, Regenerate, replacement, swapping, addition, and technique answers keep their existing
 output unless catalog browsing is separately requested. Generate and Regenerate
 commands reject catalog display. Catalog thumbnails use the same size and styles
 as sequence thumbnails, with real names as alt text and a name fallback for
@@ -86,9 +86,22 @@ Save sends the new variant, and Regenerate repeats its original generation reque
 Swapping an occurrence with itself returns `no_change`. See
 [feature 006: swap sequence elements](docs/specs/006-swap-sequence-elements/README.md).
 
-Each request supports one successful generation, one replacement, or one pair
-swap. For multiple edits or combined operations, the assistant asks which to do
-first. Adding, deleting, moving one element while shifting others, and changing
+Ask to add poses to the selected variant, for example “Add two poses before the
+third”, “Add a pose at the beginning”, or “Fill to 20 elements”. The default is
+one new pose at the end. “Another 20” adds 20; “to 20” adds the difference.
+The same `SequenceGenerator` and TypeSafe select the new block with the existing
+prefix and suffix in context. The original occurrences, order and mirror flags
+stay intact. A block creates one new variant and appears as a whole after commit;
+selection progress shows the number of new poses without a provisional card.
+Additions fill only the available space within 45 elements; a full sequence
+returns `no_change`. A selection failure leaves the selected variant intact.
+History, Save and Regenerate use the existing controls, and Regenerate repeats
+the original generation request. See
+[feature 007: add sequence elements](docs/specs/007-add-sequence-elements/README.md).
+
+Each request supports one successful generation, one replacement, one pair
+swap, or one addition block. For multiple edits or combined operations, the assistant asks which to do
+first. Deleting, moving one element while shifting others, and changing
 mirroring independently are unavailable.
 
 Conversation history and variants live in one assistant's `InMemorySaver` in the
@@ -104,6 +117,11 @@ time, and errors remain available after reruns. Each regeneration keeps its earl
 attempts. Request and variant controls are disabled during execution; a failed
 attempt keeps any already committed sequence available for Save. See
 [feature 002: assistant response progress](docs/specs/002-assistant-response-progress/README.md).
+
+When OpenAI reports exhausted API credits, the error explains that credits have
+run out and links to billing settings. A general quota error asks you to check
+credits and usage limits. These messages remain visible in request history; see
+[feature 008: API credit errors](docs/specs/008-api-credit-errors/README.md).
 
 This completes steps 1–7 of the first release of [feature 001: create-assistant-agent](docs/specs/001-create-assistant-agent/README.md).
 

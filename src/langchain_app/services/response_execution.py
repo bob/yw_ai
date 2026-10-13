@@ -16,8 +16,7 @@ from langchain_app.schemas.response_progress import (
     StepProgressEvent,
     StepStartedEvent,
 )
-
-PUBLIC_REQUEST_ERROR = "Could not complete request. Please try again."
+from langchain_app.services.request_errors import PUBLIC_REQUEST_ERROR
 
 
 class ResponseExecution:
@@ -71,7 +70,7 @@ class ResponseExecution:
             self.result = event
         return True
 
-    def fail(self, elapsed_seconds: float) -> None:
+    def fail(self, elapsed_seconds: float, *, error_message: str = PUBLIC_REQUEST_ERROR) -> None:
         """Initialization/transport failures also get exactly one terminal result."""
         if self.result is not None:
             return
@@ -87,7 +86,7 @@ class ResponseExecution:
         self.accept(RequestFinishedEvent(
             request_id=self.request_id, event_index=self._last_index + 1,
             elapsed_seconds=elapsed_seconds, duration_seconds=elapsed_seconds,
-            outcome="error", error_message=PUBLIC_REQUEST_ERROR,
+            outcome="error", error_message=error_message,
         ))
 
     def snapshot(self) -> ExecutionSnapshot:

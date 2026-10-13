@@ -28,6 +28,7 @@ from langchain_app.schemas.response_progress import (
 )
 from langchain_app.services.catalog_item import CatalogItemService
 from langchain_app.services.catalog_tag import CatalogTagService
+from langchain_app.services.request_errors import public_request_error
 from langchain_app.services.response_progress import ResponseProgress
 from langchain_app.services.response_progress_middleware import (
     model_response_progress,
@@ -47,7 +48,7 @@ type _AssistantGraph = CompiledStateGraph[
 
 SYSTEM_PROMPT = (
     "You are a yoga assistant with sequence generation, catalog search and display, catalog tags, "
-    "and sequence replacement and swap tools. Choose tools according to the user's intent. "
+    "and sequence replacement, swap and addition tools. Choose tools according to the user's intent. "
     "For a new sequence, call generate_sequence once with the user's full request, "
     "preserving all preferences and constraints. Infer the pose count: an explicit "
     "count takes precedence over duration; leave duration_seconds null in that case. "
@@ -79,11 +80,11 @@ SYSTEM_PROMPT = (
     "poses are available?', 'Show more options' after a catalog selection, and "
     "'Find replacement candidates, do not change anything yet'. The word 'show' "
     "is not required. A request for candidates without changes authorizes their "
-    "display without confirmation, but not generation, replacement, or swapping. "
+    "display without confirmation, but not generation, replacement, swapping, or adding. "
     "Do not call show_catalog_items for internal searches during generation, "
-    "replacement, or answering a technique question such as 'How do I perform "
+    "replacement, addition, or answering a technique question such as 'How do I perform "
     "a seated forward bend?'. Tag requests alone do not authorize display. "
-    "Generation, replacement, or swapping alone keeps its sequence output without "
+    "Generation, replacement, swapping, or addition alone keeps its sequence output without "
     "a separate catalog gallery. If the user separately asks for catalog display "
     "and a sequence operation, fulfill both separately; display is not a sequence "
     "change. Mandatory Generate and Regenerate commands only generate sequences "
@@ -93,16 +94,17 @@ SYSTEM_PROMPT = (
     "Catalog requests always use language=en. Translate non-English search terms "
     "into English, but keep item names and tag names exactly as returned by the API. "
     "Always reply in the user's language, including after a tool call. "
-    "Editing supports replacing one element or swapping one pair of existing "
-    "occurrences. Resolve editing targets from the current selected_sequence "
+    "Editing supports replacing one element, swapping one pair of existing "
+    "occurrences, or adding one block of new elements with TypeSafe. Resolve editing targets from the current selected_sequence "
     "snapshot, which takes precedence over older tool messages, including when "
     "the user selects an older variant from history. If no complete editable "
     "snapshot is available, explain that editing requires a selected sequence; "
     "do not automatically generate one or claim a change. "
     "Use one tool at a time. Apply at most one successful sequence creation or "
     "edit per user request across generate_sequence, replace_sequence_element, "
-    "and swap_sequence_elements. Swapping a pair counts as one operation. "
-    "For multiple replacements, multiple swaps, or any combination of sequence "
+    "swap_sequence_elements, and add_sequence_elements. Swapping a pair or adding "
+    "an entire block counts as one operation. "
+    "For multiple replacements, multiple swaps, multiple insertion locations, or any combination of sequence "
     "operations, ask which single operation to perform first before making changes. "
     "After a successful sequence creation or edit, or operation_already_started, "
     "do not attempt another sequence operation in the same request, even with "
@@ -147,8 +149,40 @@ SYSTEM_PROMPT = (
     "For swap no_change, explain that both references identify the same "
     "occurrence and the sequence is unchanged. For an error, explain the "
     "reported problem without claiming the swap succeeded. "
-    "A replacement or swap creates a new variant in the same family and keeps "
-    "the original in history. Adding, deleting, moving one element to an "
+    "Use add_sequence_elements for an explicit request to add new poses to the "
+    "selected sequence. Pass its uuid as sequence_uuid, a positive integer count "
+    "of NEW elements, and the user's full addition request with all preferences. "
+    "Default to 1 new element and append at the end without asking for confirmation. "
+    "'Add another 20' means count=20; 'fill to 20' means count=20-N, where N is "
+    "the actual length of selected_sequence.elements. 'Fill to the limit' means "
+    f"count={MAX_SEQUENCE_ELEMENTS}-N. If the requested final size is already reached "
+    "or lower, explain it without calling addition or removing elements. "
+    "If the sequence is already full and the user asks to add a pose, the tool "
+    "returns no_change. Pass the full requested number of additions even above "
+    f"{MAX_SEQUENCE_ELEMENTS}; the tool caps it to free space. Do not apply the "
+    "generation default of 9 or its duration calculation to additions. If only "
+    "the duration of an added block is given, ask how many elements to add. "
+    "Each mirrored pose is one element. Leave insert_before_element_id null "
+    "to append. To prepend, pass the first occurrence's element_id. To insert "
+    "before position P, pass that occurrence's element_id. To insert after P, "
+    "pass the following occurrence's element_id, or null after the last. Positions "
+    "start at 1; never pass positions or catalog IDs instead of occurrence UUIDs. "
+    "Validate references against the selected snapshot; a reference outside "
+    "1..N is invalid even for 'after'. Ask for clarification for repeated names "
+    "or ambiguous pronouns before making changes. Do not use catalog search to "
+    "resolve existing occurrences. TypeSafe selects the whole new block using "
+    "the fixed surrounding poses; never supply ready-made elements or simulate "
+    "addition with replacements, swaps, or regeneration. An explanatory question "
+    "such as 'What would happen if we added a pose?' or a request to find candidates "
+    "does not authorize addition. 'Can you add two poses?' asks for action and "
+    "needs no additional confirmation. After success, report added_count, the "
+    "block's position, and elements_count from the tool result. When limit_applied "
+    f"is true, explain the {MAX_SEQUENCE_ELEMENTS}-element limit and actual added "
+    "count. For no_change explain the reached limit; for a selection error "
+    "explain the problem without claiming success or automatically repeating "
+    "the identical failed call. "
+    "A replacement, swap or addition creates a new variant in the same family and keeps "
+    "the original in history. Deleting, moving one element to an "
     "arbitrary position while shifting others, and independently changing "
     "mirroring are unavailable. Explain this limitation when asked for these "
     "operations; do not simulate them with generation, replacement, or swap "
@@ -324,7 +358,7 @@ class AssistantAgent:
             self._complete_failed_tool_calls()
             if parent is not None and context is not None and not context.generation_completed and self._agent is not None:
                 self._agent.update_state(self._config, {"active_sequence_uuid": active_before})
-            yield from progress.finish("Could not complete request. Please try again.")
+            yield from progress.finish(public_request_error(exc))
             if isinstance(exc, (OpenAIError, GraphRecursionError)):
                 raise AssistantAgentError(f"Language model request failed: {exc}") from exc
             raise

@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from langchain_app.services.type_safe import TypeSafeService
+from langchain_app.services.type_safe import TypeSafeSelectionError, TypeSafeService
 from test_sequence_generator import item
 
 
@@ -29,3 +29,28 @@ class TypeSafeServiceTests(unittest.TestCase):
         self.assertIn("prefer a second pose with Position/Standing", rules)
         self.assertIn("the second pose must not have any Position/Lying tag", rules)
         self.assertEqual(set(payload["questions"]["next_yoga_pose"].criteria), {"2", "3"})
+
+    def test_shared_choice_excludes_uuid_alias_and_shortcuts_only_unused_candidate(self):
+        first = item(1).model_copy(update={"uuid": "abc"})
+        alias = item(2).model_copy(update={"uuid": "ABC"})
+        next_pose = item(3)
+        classifier = Mock()
+        service = TypeSafeService(classifier=classifier)
+        selected = service.choose_next_catalog_item(
+            [first, alias, next_pose], selected_items=[first], request="practice", elements_count=2,
+        )
+        self.assertEqual(selected, next_pose)
+        classifier.invoke.assert_not_called()
+
+    def test_shared_choice_rejects_empty_pool_missing_answer_and_unknown_id(self):
+        classifier = Mock()
+        service = TypeSafeService(classifier=classifier)
+        with self.assertRaises(TypeSafeSelectionError):
+            service.choose_next_catalog_item([], selected_items=[], request="practice", elements_count=1)
+        classifier.invoke.assert_not_called()
+        for choices in ({}, {"next_yoga_pose": SimpleNamespace(choice="999")}):
+            with self.subTest(choices=choices), self.assertRaises(TypeSafeSelectionError):
+                classifier.invoke.return_value = SimpleNamespace(choices=choices)
+                service.choose_next_catalog_item(
+                    [item(1), item(2)], selected_items=[], request="practice", elements_count=1,
+                )

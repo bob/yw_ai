@@ -16,7 +16,7 @@ from langchain_app.schemas.response_progress import (
     StepFinishedEvent, StepProgressEvent, StepStartedEvent,
 )
 from langchain_app.services.response_progress import PendingSequenceCommit, ProgressSignal
-from langchain_app.services.sequence_generator import GeneratorSearchProgress
+from langchain_app.services.sequence_generator import GeneratorAdditionProgress, GeneratorSearchProgress, MAX_SEQUENCE_ELEMENTS
 from langchain_app.tools.context import AssistantToolContext
 
 TOOL_STEPS = {
@@ -26,6 +26,7 @@ TOOL_STEPS = {
     "generate_sequence": ("generating_sequence", "Generating sequence..."),
     "replace_sequence_element": ("updating_sequence", "Updating sequence..."),
     "swap_sequence_elements": ("updating_sequence", "Swapping sequence elements..."),
+    "add_sequence_elements": ("updating_sequence", "Adding sequence elements..."),
 }
 
 
@@ -88,6 +89,8 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
     if message.status == "error" or payload.get("status") == "error":
         return "error", "Could not complete this tool call."
     if payload.get("status") == "no_change":
+        if tool_name == "add_sequence_elements":
+            return "no_change", f"The selected sequence has reached the {MAX_SEQUENCE_ELEMENTS}-element limit; no elements were added."
         if tool_name == "swap_sequence_elements":
             return "no_change", "Both references identify the same sequence element; no change was needed."
         return "no_change", "The selected item is already present; no change was needed."
@@ -101,6 +104,12 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
         return "ok", f"Sequence created with {payload['elements_count']} poses."
     if tool_name == "swap_sequence_elements":
         return "ok", "Sequence elements swapped."
+    if tool_name == "add_sequence_elements":
+        addition = payload["addition"]
+        summary = f"Added {addition['added_count']} sequence elements; {payload['elements_count']} poses in total."
+        if addition["limit_applied"]:
+            summary += f" Limited to {MAX_SEQUENCE_ELEMENTS} elements (requested {addition['requested_count']} additions)."
+        return "ok", summary
     return "ok", "Sequence element replaced."
 
 
@@ -124,8 +133,13 @@ def _tool_response_progress(
     search_started_at = 0.0
 
     def publish(data: object) -> None:
-        nonlocal order, search_id, search_started_at
-        if isinstance(data, CatalogItemSchema):
+        nonlocal order, total, search_id, search_started_at
+        if isinstance(data, GeneratorAdditionProgress):
+            order, total = data.completed, data.total
+            writer(ProgressSignal(StepProgressEvent, {
+                **identity, "completed": order, "total": total,
+            }))
+        elif isinstance(data, CatalogItemSchema) and name == "generate_sequence":
             order += 1
             writer(ProgressSignal(SequenceElementEvent, {
                 **identity, "order": order, "catalog_item": data.model_copy(deep=True),

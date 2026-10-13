@@ -22,7 +22,7 @@ class GeneratedSequence(ApiSchema):
     uuid: UUID = Field(default_factory=uuid4)
     family_uuid: UUID = Field(default_factory=uuid4)
     parent_uuid: UUID | None = None
-    operation: Literal["generate", "regenerate", "replace", "swap"] = "generate"
+    operation: Literal["generate", "regenerate", "replace", "swap", "add"] = "generate"
     generation_request: str
     operation_request: str
     name: str = "New Sequence"

@@ -1,0 +1,1003 @@
+{
+  "model": "openai:gpt-5.5",
+  "started_at": "2026-10-12T14:58:23.503497+00:00",
+  "cases": [
+    {
+      "case": "default_one",
+      "request": "Добавь асану",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "31a11c4e-33e0-48df-8e84-c967f12d1605",
+            "count": 1,
+            "request": "Добавь асану",
+            "insert_before_element_id": null
+          },
+          "id": "call_l3tOjyTdh7iQ15Q2dzLaIgmO",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавлена 1 асана в конец последовательности — позиция 6.\n\nТеперь в последовательности 6 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "7e8533d8-bcb0-4a17-8268-47c2efed7432",
+            "order": 6
+          }
+        ]
+      }
+    },
+    {
+      "case": "append_many",
+      "request": "Добавь ещё три асаны стоя",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "00c90a8f-2e17-439d-af8b-3fa1fd3e9f00",
+            "count": 3,
+            "request": "Добавь ещё три асаны стоя",
+            "insert_before_element_id": null
+          },
+          "id": "call_TczEcUD9dOWAP3PSzHKO4JY3",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавила 3 асаны стоя в конец последовательности.\n\n- Позиция добавленного блока: с 6-й\n- Всего асан теперь: 8",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 3,
+        "added_count": 3,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "9cad9559-9520-4216-847b-4ebfd97ea673",
+            "order": 6
+          },
+          {
+            "element_id": "cc8a9678-9c84-4e59-97e9-17c1e354afbf",
+            "order": 7
+          },
+          {
+            "element_id": "a6f82fca-5fe3-4a1d-af3b-491aff21eae5",
+            "order": 8
+          }
+        ]
+      }
+    },
+    {
+      "case": "before_third",
+      "request": "Добавь две асаны перед третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "1bdc8447-a009-4a9f-9f1d-9bbb0b5aaf60",
+            "count": 2,
+            "request": "Добавь две асаны перед третьей",
+            "insert_before_element_id": "5e67b1e4-0649-40d9-89e9-9ddac99e4475"
+          },
+          "id": "call_eh3JcKZ24yG1pnPSmVatj5rR",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово — добавлены 2 асаны перед третьей позицией.\n\nНовый блок вставлен с позиции 3:\n3. Pose 110  \n4. Pose 111  \n\nТеперь в последовательности 7 элементов.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "5e67b1e4-0649-40d9-89e9-9ddac99e4475",
+        "elements": [
+          {
+            "element_id": "278cf49e-28e0-45d3-a22b-dc058102d66d",
+            "order": 3
+          },
+          {
+            "element_id": "ddb96078-549b-48d4-8b05-94553eee4e33",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "after_second",
+      "request": "Добавь две асаны после второй",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "b7420c50-45fa-4c3c-8681-b24b93d6aebf",
+            "count": 2,
+            "request": "Добавь две асаны после второй",
+            "insert_before_element_id": "534a36a4-b61a-4359-bd1d-c873960ceb58"
+          },
+          "id": "call_vrUFSzKuWpGVeK0CI46XIbhw",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавил 2 асаны после второй позиции.\n\nНовый блок начинается с позиции 3.  \nТеперь в последовательности 7 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "534a36a4-b61a-4359-bd1d-c873960ceb58",
+        "elements": [
+          {
+            "element_id": "957d5c75-ea7c-42d4-96d3-6e252b424529",
+            "order": 3
+          },
+          {
+            "element_id": "ea125eb7-de25-428a-b0ba-cabddef6b21e",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "prepend",
+      "request": "Добавь одну асану в начало",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "4c125563-45ec-49b0-bbd6-387f735386ff",
+            "count": 1,
+            "request": "Добавь одну асану в начало",
+            "insert_before_element_id": "1c2bd3e6-db2f-442e-b6cc-5c5686b08793"
+          },
+          "id": "call_bzbdLWt0EMMbMCowI9PdmcZO",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавила 1 асану в начало последовательности.\n\n- Позиция добавленного блока: 1\n- Всего асан теперь: 6",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 1,
+        "insert_before_element_id": "1c2bd3e6-db2f-442e-b6cc-5c5686b08793",
+        "elements": [
+          {
+            "element_id": "667bb4d2-0d9d-4808-a253-d755273f5fba",
+            "order": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "after_last",
+      "request": "Добавь одну асану после последней",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "c2a113dc-f064-4b00-a271-028c9edac5e9",
+            "count": 1,
+            "request": "Добавь одну асану после последней",
+            "insert_before_element_id": null
+          },
+          "id": "call_hTq43y94VAWTakNZLNxAIqUQ",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавила 1 асану после последней.\n\nНовая асана добавлена на позицию 6.  \nТеперь в последовательности 6 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "afba33a7-e930-44ab-9ccf-af773beab6a3",
+            "order": 6
+          }
+        ]
+      }
+    },
+    {
+      "case": "target_20",
+      "request": "Дополни секвенцию до 20 элементов",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "a0fbeea5-4e1a-4d19-a32e-022456b14abc",
+            "count": 15,
+            "request": "Дополни секвенцию до 20 элементов",
+            "insert_before_element_id": null
+          },
+          "id": "call_3GFRSOWb0RZKpKRxRQFtzbJQ",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово — я дополнил секвенцию до 20 элементов.\n\nДобавлено: 15 новых элементов  \nПозиция добавленного блока: с 6-й позиции  \nИтоговое количество элементов: 20",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 15,
+        "added_count": 15,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "0fcdbd71-f81e-4d0e-bdab-0cfb7d8e451c",
+            "order": 6
+          },
+          {
+            "element_id": "21697a3c-2b07-4541-97ed-ea07a5f7cc76",
+            "order": 7
+          },
+          {
+            "element_id": "cd592988-51a5-4089-b146-e141a08105a3",
+            "order": 8
+          },
+          {
+            "element_id": "67724541-70c3-4ef5-95a5-ba9af490ec05",
+            "order": 9
+          },
+          {
+            "element_id": "5099838c-30ab-4b6f-ab6a-a8206a58ae4d",
+            "order": 10
+          },
+          {
+            "element_id": "c9c9a03e-e3b7-4268-b2fe-77a6b7686d03",
+            "order": 11
+          },
+          {
+            "element_id": "23b4be9b-9aa5-4d7b-acc5-7c31ae0c2e64",
+            "order": 12
+          },
+          {
+            "element_id": "fe4789f8-0e23-47a0-b0b1-227b75f7a3f1",
+            "order": 13
+          },
+          {
+            "element_id": "5d859df2-d34f-4e58-9f76-473bb0bb12f3",
+            "order": 14
+          },
+          {
+            "element_id": "23b3bad8-3e61-45b9-8ade-4a8200f3de85",
+            "order": 15
+          },
+          {
+            "element_id": "a85ffef1-ce3c-4f76-9f19-be18ace2541b",
+            "order": 16
+          },
+          {
+            "element_id": "89054474-e511-4dc4-be79-177dd73d08ba",
+            "order": 17
+          },
+          {
+            "element_id": "0bced467-5cc3-44b6-ae6f-c12b004a3967",
+            "order": 18
+          },
+          {
+            "element_id": "7e37f3e7-84ae-4f7c-b6c9-e05761e96674",
+            "order": 19
+          },
+          {
+            "element_id": "309b33af-a580-4238-8607-3f7e4d8c459a",
+            "order": 20
+          }
+        ]
+      }
+    },
+    {
+      "case": "another_20",
+      "request": "Добавь ещё 20 элементов",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "9d3703ed-bb29-446c-a0ad-3f2bbea3401f",
+            "count": 20,
+            "request": "Добавь ещё 20 элементов",
+            "insert_before_element_id": null
+          },
+          "id": "call_awa3gCxAqQCVxmBVJAlasjYR",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово — добавлено 20 новых элементов.\n\n- Блок добавлен с позиции 6\n- Сейчас в последовательности 25 элементов",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 20,
+        "added_count": 20,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "3cec43c3-29df-4868-8534-5298365b5abd",
+            "order": 6
+          },
+          {
+            "element_id": "a29b6653-590a-4747-91d0-a1a28bc6a129",
+            "order": 7
+          },
+          {
+            "element_id": "dab97f84-df29-4af2-bc96-45cb34ea8fd2",
+            "order": 8
+          },
+          {
+            "element_id": "f5b69dac-1b82-45d1-a8a7-cd0b5888f194",
+            "order": 9
+          },
+          {
+            "element_id": "ae90e2e1-1f44-4bc8-85c5-4247ead6a367",
+            "order": 10
+          },
+          {
+            "element_id": "279da97c-3e88-4633-b7d2-b7dc7fb129bb",
+            "order": 11
+          },
+          {
+            "element_id": "faeaacfc-f7e0-4836-b3e2-fca3a89783f0",
+            "order": 12
+          },
+          {
+            "element_id": "ad012118-85f8-4d55-9e8b-d4f5dd4db056",
+            "order": 13
+          },
+          {
+            "element_id": "4b2fc729-ea05-4dc8-8450-3613ee86682f",
+            "order": 14
+          },
+          {
+            "element_id": "5a677a9b-777b-4a17-81d9-fc3fc0cad498",
+            "order": 15
+          },
+          {
+            "element_id": "b61ed011-bbaf-41af-a9ac-eea6b21d8458",
+            "order": 16
+          },
+          {
+            "element_id": "88c96f6f-4d88-4407-8af2-407fc0f8473b",
+            "order": 17
+          },
+          {
+            "element_id": "5e57571e-5c65-48f5-9bf3-b3210be1eb58",
+            "order": 18
+          },
+          {
+            "element_id": "b2c1cba8-6b68-47f0-979f-4033751382fd",
+            "order": 19
+          },
+          {
+            "element_id": "a1d26794-cde2-401b-adcf-8e067d542735",
+            "order": 20
+          },
+          {
+            "element_id": "0c842350-0eb8-4610-9e4a-625717a29125",
+            "order": 21
+          },
+          {
+            "element_id": "0fbb2403-be74-4b61-af71-e408616dcc4e",
+            "order": 22
+          },
+          {
+            "element_id": "457e2f02-df34-469b-8383-da503e8b8276",
+            "order": 23
+          },
+          {
+            "element_id": "8bc05292-03d9-4aa1-8ec5-1a74ec6ab764",
+            "order": 24
+          },
+          {
+            "element_id": "6d44eeb2-bc0d-4717-9274-54fe644959dc",
+            "order": 25
+          }
+        ]
+      }
+    },
+    {
+      "case": "fill_limit",
+      "request": "Дополни до лимита",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "4da1d37e-f29e-4369-958f-1216ee10129c",
+            "count": 40,
+            "request": "Дополни до лимита",
+            "insert_before_element_id": null
+          },
+          "id": "call_yCEpppZq5X3maPlbR8QCMPt9",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово — последовательность дополнена до лимита.\n\n- Добавлено новых элементов: 40\n- Новые позы вставлены с позиции: 6\n- Всего элементов теперь: 45",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 40,
+        "added_count": 40,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "025ac33d-fe1c-48b0-a98a-4628f36b2f38",
+            "order": 6
+          },
+          {
+            "element_id": "1a5bc1f1-fdd9-44e3-8a39-7d0d7e0e77b2",
+            "order": 7
+          },
+          {
+            "element_id": "61f8a798-8b43-44d2-8b3c-23fb96049f14",
+            "order": 8
+          },
+          {
+            "element_id": "945ecf69-5bf1-490d-b673-c147d1e51440",
+            "order": 9
+          },
+          {
+            "element_id": "6dd3c15d-15ad-4112-b318-ebf043b18665",
+            "order": 10
+          },
+          {
+            "element_id": "8961d543-b801-4a53-b3d5-6182bfd9dca1",
+            "order": 11
+          },
+          {
+            "element_id": "0df9d3b6-051d-48b2-ab72-29c6b3dd5c1a",
+            "order": 12
+          },
+          {
+            "element_id": "0b29fee0-4a32-434a-9507-0d2f18c4bd8b",
+            "order": 13
+          },
+          {
+            "element_id": "a6dcfcc0-16cc-4caa-af95-c13863e40ac2",
+            "order": 14
+          },
+          {
+            "element_id": "7ad2e7b6-d4b6-4a9f-a18e-9c71e5fa5f2b",
+            "order": 15
+          },
+          {
+            "element_id": "0d38b3be-98db-4ed8-81fb-9baf6e7fab73",
+            "order": 16
+          },
+          {
+            "element_id": "c43ade94-cb1d-423c-b45a-9c8cfb013327",
+            "order": 17
+          },
+          {
+            "element_id": "5ed7041e-f63f-4639-9e95-a0e0873867a6",
+            "order": 18
+          },
+          {
+            "element_id": "ae5e28e2-5d41-4dba-a8b1-5e4c64c75b59",
+            "order": 19
+          },
+          {
+            "element_id": "4d8643ad-a386-4f34-9a8f-e74172451f7e",
+            "order": 20
+          },
+          {
+            "element_id": "df3ed3d9-7a43-4136-b501-7ceb5ce5cc38",
+            "order": 21
+          },
+          {
+            "element_id": "10e5c417-6d04-439e-85db-9535f0368fac",
+            "order": 22
+          },
+          {
+            "element_id": "1bb66124-bf8d-4804-bfe7-3dc06f6f684d",
+            "order": 23
+          },
+          {
+            "element_id": "99ac87f5-11b3-4013-b53a-c5bf4acfcbfe",
+            "order": 24
+          },
+          {
+            "element_id": "c101c216-e9c9-4f25-8943-6fc511f13fc8",
+            "order": 25
+          },
+          {
+            "element_id": "90bd9f3b-6c69-4458-8387-6ebb65bbe4b1",
+            "order": 26
+          },
+          {
+            "element_id": "6f404de5-60e0-4c27-8934-f41489a80ed9",
+            "order": 27
+          },
+          {
+            "element_id": "60ed4105-b58d-442f-880c-ef7b594db953",
+            "order": 28
+          },
+          {
+            "element_id": "e5352b75-c49e-48a6-b4ab-aebfc7dda1d8",
+            "order": 29
+          },
+          {
+            "element_id": "887cbc38-a9c6-40a1-80b6-062cdb2173cc",
+            "order": 30
+          },
+          {
+            "element_id": "a85b1b0f-5d0a-477d-a0fa-236a01728c57",
+            "order": 31
+          },
+          {
+            "element_id": "6a63afaa-f2f6-4648-8bb0-2cd7a9cad8d4",
+            "order": 32
+          },
+          {
+            "element_id": "03a6bfd0-7ff5-47b2-a49e-0c0e2a7e94d4",
+            "order": 33
+          },
+          {
+            "element_id": "a9c5c7cf-4cd6-483a-b898-05d6cb8fdf0d",
+            "order": 34
+          },
+          {
+            "element_id": "6f92b18e-9467-4878-b08d-078c07839591",
+            "order": 35
+          },
+          {
+            "element_id": "03d6993e-e189-4f5a-ad86-553a7ce2923c",
+            "order": 36
+          },
+          {
+            "element_id": "9e60bb6f-a713-4e4d-b221-d1dd819af5ce",
+            "order": 37
+          },
+          {
+            "element_id": "91acc5b7-59d4-47fb-928f-efb5ee459109",
+            "order": 38
+          },
+          {
+            "element_id": "26596d25-5ede-4e3c-ad08-af33ec7e71a3",
+            "order": 39
+          },
+          {
+            "element_id": "4e0d3153-f4c4-4cae-8fe5-c8031d553e87",
+            "order": 40
+          },
+          {
+            "element_id": "1811187b-d2a9-4be3-b2cb-47c9d19b95a5",
+            "order": 41
+          },
+          {
+            "element_id": "fa9160bc-ec22-4e27-b7b7-89d8126e7d5c",
+            "order": 42
+          },
+          {
+            "element_id": "32a9ac26-ee4f-4251-8104-4a302dcc00ed",
+            "order": 43
+          },
+          {
+            "element_id": "91e161ac-ed0f-4aff-a836-25c797fed841",
+            "order": 44
+          },
+          {
+            "element_id": "6268635e-9618-4515-a762-17e759bf6e0f",
+            "order": 45
+          }
+        ]
+      }
+    },
+    {
+      "case": "truncated",
+      "request": "Добавь ещё пять асан",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "cca1ed90-00d1-4610-a409-6f3e0b98144f",
+            "count": 5,
+            "request": "Добавь ещё пять асан",
+            "insert_before_element_id": null
+          },
+          "id": "call_KpDApgthLWudYPo8VTGtYZRU",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавила 2 асаны в конец последовательности — на позиции 44–45.\n\nЗапрошено было 5, но сработало ограничение: в последовательности может быть максимум 45 элементов. Сейчас в последовательности 45 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 5,
+        "added_count": 2,
+        "limit_applied": true,
+        "position": 44,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "2891ac02-771a-4e5d-8a1a-58cfc1ea2fdb",
+            "order": 44
+          },
+          {
+            "element_id": "27e20366-81cb-4a20-8bad-ef1118354c56",
+            "order": 45
+          }
+        ]
+      }
+    },
+    {
+      "case": "full",
+      "request": "Добавь одну асану",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "ab448e0b-3fe7-44e9-8ec1-02796b9fa3b4",
+            "count": 1,
+            "request": "Добавь одну асану",
+            "insert_before_element_id": null
+          },
+          "id": "call_1HNMUjIExibmBCNDB0cpitmk",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Не удалось добавить асану: выбранная последовательность уже содержит максимум — 45 элементов.  \n\nЛимит для последовательности составляет 45 асан, поэтому добавлено: 0.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "already_target",
+      "request": "Дополни до 5 элементов",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В последовательности уже 5 элементов, поэтому дополнять до 5 не нужно — размер уже достигнут.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "lower_target",
+      "request": "Дополни до 3 элементов",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В текущей последовательности уже 5 элементов, поэтому дополнять до 3 не нужно — целевой размер уже превышен.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "polite_action",
+      "request": "Можешь добавить две асаны после второй?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "23e55592-dabf-4681-a0f0-efe7f918f1f3",
+            "count": 2,
+            "request": "Добавить две асаны после второй.",
+            "insert_before_element_id": "9b8384e9-c65d-45a4-a26a-b680439e4ceb"
+          },
+          "id": "call_aVdSO7aWtytyZcazOqcdiaiQ",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Готово — добавлены 2 асаны после второй позиции.\n\nНовый блок начинается с позиции 3.  \nТеперь в последовательности 7 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "9b8384e9-c65d-45a4-a26a-b680439e4ceb",
+        "elements": [
+          {
+            "element_id": "523a78d4-2867-4119-bc08-269eaca8a5a2",
+            "order": 3
+          },
+          {
+            "element_id": "d794b348-c848-4702-bf9a-855fef3bc0cb",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "english",
+      "request": "Add two poses before the third pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "1e1caab3-b724-4b55-8caf-a18818c16f30",
+            "count": 2,
+            "request": "Add two poses before the third pose",
+            "insert_before_element_id": "1e2145dc-007e-4f20-b316-ee7435038c8b"
+          },
+          "id": "call_cZn0udywKzow4SNd1rNUrOd1",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Added 2 poses before the third pose. The new block starts at position 3, and the sequence now has 7 poses.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "1e2145dc-007e-4f20-b316-ee7435038c8b",
+        "elements": [
+          {
+            "element_id": "c79beebb-0222-40a8-a1c9-d40eb4707feb",
+            "order": 3
+          },
+          {
+            "element_id": "c9ede528-c3d5-4746-bfa0-0d78449851ff",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "english_default",
+      "request": "Add a pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "cdac7d2f-f6f5-4443-b7d2-cf6e84797457",
+            "count": 1,
+            "request": "Add a pose",
+            "insert_before_element_id": null
+          },
+          "id": "call_HXTWPZO4miEE6awVgMBcTz63",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Added 1 pose at position 6. The sequence now has 6 poses.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "32a0e052-3972-4385-824b-65b736f59fe6",
+            "order": 6
+          }
+        ]
+      }
+    },
+    {
+      "case": "unique_name",
+      "request": "Добавь одну асану перед Tree pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "08c535f9-a973-48f1-9b0c-f3708487a03d",
+            "count": 1,
+            "request": "Добавь одну асану перед Tree pose",
+            "insert_before_element_id": "a35c5f9d-cebc-4828-8ec6-90cc0a39a681"
+          },
+          "id": "call_HMB8gEwgOyHZ5MXrU8PNwrWe",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавлена 1 асана перед Tree pose — на позицию 3.\n\nВ последовательности теперь 6 асан.",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "a35c5f9d-cebc-4828-8ec6-90cc0a39a681",
+        "elements": [
+          {
+            "element_id": "6d0b34d8-91ce-4018-a19d-166efa9fb79f",
+            "order": 3
+          }
+        ]
+      }
+    },
+    {
+      "case": "older_selection",
+      "request": "Добавь две асаны перед третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "5c628fb5-c8c5-4bee-9f63-78fe20ffe7b5",
+            "count": 2,
+            "request": "Добавь две асаны перед третьей",
+            "insert_before_element_id": "abe1b63e-65a2-42ed-b9b7-29fa3ccc07fd"
+          },
+          "id": "call_wnEkDtYsOG94hNhtyX4hKtj0",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Добавил две асаны перед третьей позой.\n\n- Добавлено: 2\n- Позиция вставки: с 3-й позиции\n- Теперь в последовательности: 7 асан",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "abe1b63e-65a2-42ed-b9b7-29fa3ccc07fd",
+        "elements": [
+          {
+            "element_id": "14b0eb83-eedb-436f-9dc7-21c6a2fd859b",
+            "order": 3
+          },
+          {
+            "element_id": "5492fcde-792d-4c80-a8e9-871773e72d75",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "repeated_name",
+      "request": "Добавь асану перед Tree pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В последовательности две асаны **Tree pose** — на позиции 2 и 3.  \n\nПеред какой из них добавить новую асану: перед **2-й** или перед **3-й** позой?",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "ambiguous_pronoun",
+      "request": "Добавь асану после неё",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "После какой именно асаны добавить новую? Укажите позицию или название, например: «после 3-й позы» или «после Tree pose».",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "out_of_range",
+      "request": "Добавь асану после шестой",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "В текущей последовательности только 5 асан, поэтому позиции 6 не существует.  \n\nМогу добавить асану в конец — после 5-й позы — или вставить её после любой позиции с 1 по 5.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "no_selection",
+      "request": "Добавь две асаны",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Чтобы добавить две асаны, нужна выбранная последовательность. Сейчас последовательность не выбрана, поэтому я не могу выполнить добавление.\n\nСначала создайте или выберите последовательность, а затем я смогу добавить 2 асаны.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "multiple_locations",
+      "request": "Добавь одну асану в начало и две после третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Могу выполнить только одно добавление за раз и в одну точку последовательности.\n\nЧто сделать сначала?\n\n1. Добавить 1 асану в начало  \n2. Добавить 2 асаны после третьей позы — сейчас это Tree pose\n\nНапишите номер варианта.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "add_and_replace",
+      "request": "Добавь две асаны и замени вторую на Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Могу выполнить только одно изменение за раз. Что сделать сначала?\n\n1. Добавить две асаны в конец последовательности  \n2. Заменить вторую асану — сейчас это Cat pose — на Warrior pose",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "add_and_swap",
+      "request": "Добавь две асаны и поменяй первую и последнюю местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Могу выполнить только одну операцию за раз. Что сделать сначала?\n\n1. **Добавить две асаны** в конец текущей последовательности, или  \n2. **Поменять местами первую и последнюю асаны** — Mountain pose и Corpse pose?",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "explanation",
+      "request": "Что изменится, если добавить две асаны перед третьей?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Если добавить две асаны перед третьей, то:\n\n- Новые 2 асаны будут вставлены между текущей 2-й и 3-й позами:\n  1. Mountain pose  \n  2. Cat pose  \n  3. новая асана  \n  4. новая асана  \n  5. Tree pose  \n  6. Cobra pose  \n  7. Corpse pose  \n\n- Текущая 3-я поза, **Tree pose**, сдвинется на 5-ю позицию.\n- Общее количество элементов увеличится с **5 до 7**.\n- Остальные позы после места вставки также сдвинутся на две позиции.\n- Исходная последовательность останется в истории, а изменение создало бы новый вариант.\n\nПока я ничего не менял.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "duration_only",
+      "request": "Добавь асаны ещё на пять минут",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Сколько новых асан добавить?  \n\nДля добавления к существующей последовательности мне нужно количество элементов, а не длительность: например, «добавь 7 асан» или «добавь 5 асан в конец».",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "candidates",
+      "request": "Найди кандидатов для добавления, пока ничего не меняй",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "search_catalog_items",
+          "args": {
+            "name": null,
+            "uuid": null,
+            "bilateral": null,
+            "catalog_tag_names": null,
+            "limit": 10,
+            "rand": true
+          },
+          "id": "call_ppwiR2DY26pB0IRng0bw82va",
+          "type": "tool_call"
+        },
+        {
+          "name": "show_catalog_items",
+          "args": {
+            "catalog_item_ids": [
+              110,
+              111
+            ]
+          },
+          "id": "call_16ZlQMTxVwDrVJNdyvQhylqv",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "Вот кандидаты для добавления. Последовательность не изменена.",
+      "commit_count": 0,
+      "addition": null
+    }
+  ]
+}

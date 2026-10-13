@@ -11,8 +11,10 @@ from pydantic import Field
 
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.schemas.assistant import AssistantState
-from langchain_app.services.sequence_editor import SequenceEditorError, replace_element, swap_elements
+from langchain_app.services.catalog_errors import CatalogServiceError
+from langchain_app.services.sequence_editor import SequenceEditorError, insert_elements, replace_element, swap_elements
 from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS
+from langchain_app.services.type_safe import TypeSafeServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
 
 
@@ -82,6 +84,107 @@ def generate_sequence(
         "turn_operation_committed": True,
         "messages": [ToolMessage(
             content=json.dumps({"status": "ok", **snapshot}, ensure_ascii=False),
+            tool_call_id=runtime.tool_call_id or "",
+        )],
+    })
+
+
+@tool
+def add_sequence_elements(
+    sequence_uuid: UUID,
+    count: Annotated[int, Field(
+        gt=0, strict=True,
+        description="Requested number of NEW elements; the tool caps additions to available space.",
+    )],
+    request: Annotated[str, Field(min_length=1)],
+    runtime: ToolRuntime[AssistantToolContext, AssistantState],
+    insert_before_element_id: UUID | None = None,
+) -> Command | ToolMessage:
+    """Select a block of new poses with TypeSafe and add it to the selected sequence.
+
+    Call when the user asks to apply an addition. Preserve all preferences in
+    request; do not supply catalog IDs, ready-made poses, or mirror flags.
+    Count is the number of new elements, not the final sequence size. Use 1
+    when no count is specified. Pass the requested count even above 45; the
+    tool limits the block to the available space. Use UUIDs from the current
+    selected snapshot. A null anchor appends; an occurrence UUID inserts before
+    it. To insert after a pose, use the following occurrence, or null at the end.
+    Clarify ambiguous references before calling. The entire block consumes one
+    operation, shared with generation, replacement and swapping. Explain a
+    selection failure without automatically repeating the same failed call.
+    """
+    context = runtime.context
+    if context.require_generation:
+        return tool_error(runtime, "generation_required", "This application command requires generate_sequence")
+    if context.generation_started or runtime.state.get("turn_operation_committed", False):
+        return tool_error(runtime, "operation_already_started", "Change at most one sequence per request")
+    active_uuid = runtime.state.get("active_sequence_uuid")
+    sequences = runtime.state.get("sequences", {})
+    snapshot = sequences.get(active_uuid) if active_uuid is not None else None
+    if snapshot is None:
+        return tool_error(runtime, "sequence_not_found", "Addition requires a selected sequence.")
+    source = GeneratedSequence.from_snapshot(snapshot)
+    if sequence_uuid != source.uuid:
+        return tool_error(runtime, "stale_sequence", "Use the UUID of the currently selected sequence")
+    if not request.strip():
+        return tool_error(runtime, "invalid_arguments", "request must not be blank")
+    if not source.elements:
+        return tool_error(runtime, "empty_sequence", "The source sequence must not be empty")
+    insertion_index = len(source.elements)
+    if insert_before_element_id is not None:
+        insertion_index = next((
+            index for index, element in enumerate(source.elements)
+            if element.element_id == insert_before_element_id
+        ), -1)
+        if insertion_index == -1:
+            return tool_error(runtime, "sequence_element_not_found", "The insertion anchor is not in the selected sequence")
+    available = max(0, MAX_SEQUENCE_ELEMENTS - len(source.elements))
+    if available == 0:
+        return ToolMessage(
+            content=json.dumps({
+                "status": "no_change", "code": "sequence_limit_reached",
+                "message": f"The selected sequence has no space within the {MAX_SEQUENCE_ELEMENTS}-element limit",
+                "uuid": str(source.uuid), "requested_count": count,
+                "added_count": 0, "limit_applied": True,
+            }),
+            tool_call_id=runtime.tool_call_id or "",
+        )
+    added_count = min(count, available)
+    generator = context.generator_factory()
+    try:
+        items = generator.add_elements(
+            source, request, language=source.language, count=added_count,
+            insert_before_element_id=insert_before_element_id,
+            progress_observer=runtime.stream_writer,
+        )
+        variant = insert_elements(
+            source, items=items, count=added_count, request=context.user_request,
+            insert_before_element_id=insert_before_element_id,
+        )
+    except CatalogServiceError as exc:
+        return tool_error(runtime, "catalog_search_failed", str(exc))
+    except TypeSafeServiceError as exc:
+        return tool_error(runtime, "addition_selection_failed", str(exc))
+    except SequenceEditorError as exc:
+        return tool_error(runtime, exc.code, str(exc))
+    snapshot = variant.model_dump(mode="json")
+    return Command(update={
+        "sequences": {str(variant.uuid): snapshot},
+        "active_sequence_uuid": str(variant.uuid),
+        "turn_operation_committed": True,
+        "messages": [ToolMessage(
+            content=json.dumps({
+                "status": "ok", **snapshot,
+                "addition": {
+                    "requested_count": count, "added_count": added_count,
+                    "limit_applied": count > added_count, "position": insertion_index + 1,
+                    "insert_before_element_id": str(insert_before_element_id) if insert_before_element_id else None,
+                    "elements": [
+                        {"element_id": str(element.element_id), "order": element.order}
+                        for element in variant.elements[insertion_index:insertion_index + added_count]
+                    ],
+                },
+            }, ensure_ascii=False),
             tool_call_id=runtime.tool_call_id or "",
         )],
     })
