@@ -249,7 +249,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertNotIn("total_count", result)
         factory.assert_not_called()
 
-    def test_generation_returns_catalog_snapshot_to_model_before_localized_reply(self):
+    def test_generation_returns_compact_result_and_selected_context_before_localized_reply(self):
         generator = Mock()
         generated = pose(1)
         generated.name = "Child's pose"
@@ -261,9 +261,12 @@ class AssistantAgentTests(unittest.TestCase):
         ])
         self.assertEqual(list(assistant(lambda: generator, model=model).stream("Практика из одной асаны")),
                          [generated, reply])
-        snapshot = json.loads(model.received_messages[1][-1].content)
-        self.assertEqual(snapshot["elements"][0]["catalog_item"]["name"], "Child's pose")
-        self.assertEqual(snapshot["language"], "en")
+        result = json.loads(model.received_messages[1][-1].content)
+        self.assertEqual(set(result), {"status", "uuid", "operation", "elements_count"})
+        self.assertEqual(result["operation"], "generate")
+        self.assertEqual(result["elements_count"], 1)
+        self.assertEqual(selected_snapshot(model)["elements"][0]["catalog_item"]["name"], "Child's pose")
+        self.assertEqual(selected_snapshot(model)["language"], "en")
         generator.generate.assert_called_once_with(
             "Практика из одной асаны", language="en", count=1, starting_catalog_item_id=None, progress_observer=ANY,
         )

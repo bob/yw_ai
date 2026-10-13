@@ -1,0 +1,66 @@
+{
+  "tokenizer": "tiktoken 0.14.0",
+  "encoding": "o200k_base",
+  "scope": "JSON sequence tool content only; provider overhead excluded",
+  "rows": [
+    {
+      "scenario": "Generate 9",
+      "baseline_tokens": 1373,
+      "after_tokens": 44,
+      "reduction_percent": 96.8,
+      "gpt_calls": 2,
+      "jev_calls": 7
+    },
+    {
+      "scenario": "Generate 36",
+      "baseline_tokens": 5092,
+      "after_tokens": 48,
+      "reduction_percent": 99.06,
+      "gpt_calls": 2,
+      "jev_calls": 34
+    },
+    {
+      "scenario": "Generate 45",
+      "baseline_tokens": 6331,
+      "after_tokens": 46,
+      "reduction_percent": 99.27,
+      "gpt_calls": 2,
+      "jev_calls": 43
+    },
+    {
+      "scenario": "Regenerate 9",
+      "baseline_tokens": 1414,
+      "after_tokens": 50,
+      "reduction_percent": 96.46,
+      "gpt_calls": 2,
+      "jev_calls": 7
+    },
+    {
+      "scenario": "Replace",
+      "baseline_tokens": 1616,
+      "after_tokens": 130,
+      "reduction_percent": 91.96,
+      "gpt_calls": 3,
+      "jev_calls": 0
+    },
+    {
+      "scenario": "Swap",
+      "baseline_tokens": 1490,
+      "after_tokens": 158,
+      "reduction_percent": 89.4,
+      "gpt_calls": 2,
+      "jev_calls": 0
+    },
+    {
+      "scenario": "Add 3",
+      "baseline_tokens": 1960,
+      "after_tokens": 192,
+      "reduction_percent": 90.2,
+      "gpt_calls": 2,
+      "jev_calls": 2
+    }
+  ],
+  "baseline_total": 19276,
+  "after_total": 668,
+  "reduction_percent": 96.53
+}

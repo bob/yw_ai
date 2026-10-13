@@ -134,18 +134,21 @@
 - добавляет полный снимок в `sequences` с существующим merge-reducer;
 - устанавливает `active_sequence_uuid` в UUID нового варианта;
 - устанавливает `turn_operation_committed=true`;
-- добавляет `ToolMessage` с `status=ok`, полным новым снимком и описанием обмена.
+- добавляет компактный `ToolMessage` с `status=ok`, UUID, `operation=swap`,
+  `elements_count` и описанием обмена по [контракту 009](../009-compact-gpt-tool-results/tool-contract.md).
 
 Поле `swap` в результате — список из двух записей в порядке аргументов:
 
 ```json
 [
-  {"element_id": "<first_element_id>", "old_order": 3, "new_order": 5},
-  {"element_id": "<second_element_id>", "old_order": 5, "new_order": 3}
+  {"element_id": "<first_element_id>", "name": "<имя первой позы>", "old_order": 3, "new_order": 5},
+  {"element_id": "<second_element_id>", "name": "<имя второй позы>", "old_order": 5, "new_order": 3}
 ]
 ```
 
-Позиции берутся из исходного и нового снимков. Для `no_change` результат
+Имена и позиции берутся из исходного и нового снимков. Полный новый снимок
+доступен в `state.sequences` и следующем `selected_sequence`, без дублирования
+в тексте tool result. Для `no_change` результат
 содержит только `status=no_change` и `uuid` исходного варианта.
 После commit следующий вызов модели получает обновлённый выбранный снимок.
 Ассистент отвечает на языке пользователя и кратко сообщает, какие две позы

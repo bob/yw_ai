@@ -57,7 +57,8 @@ Entrypoint приложения переименован в `src/langchain_app/a
 
 `GeneratedSequence` хранит полный материализованный состав: catalog items,
 позиции, UUID вхождений и mirror flags. Генерация публикует `Command` с полным
-снимком, активным UUID и структурированным `ToolMessage`. `AssistantState`
+снимком в состоянии, активным UUID и компактным `ToolMessage`
+по [контракту 009](../009-compact-gpt-tool-results/tool-contract.md). `AssistantState`
 объединяет варианты по UUID; старые снимки не изменяются.
 
 Middleware `selected_sequence_context` перед каждым вызовом модели добавляет

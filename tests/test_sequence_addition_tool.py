@@ -230,7 +230,8 @@ class SequenceAdditionToolTests(unittest.TestCase):
                 message, = update["messages"]
                 self.assertEqual(message.tool_call_id, "addition-call")
                 self.assertEqual(json.loads(message.content), {
-                    "status": "ok", **variant.model_dump(mode="json"),
+                    "status": "ok", "uuid": str(variant.uuid),
+                    "operation": "add", "elements_count": variant.elements_count,
                     "addition": {
                         "requested_count": count, "added_count": count, "limit_applied": False,
                         "position": insertion + 1, "insert_before_element_id": str(anchor) if anchor else None,

@@ -124,14 +124,17 @@ Tool всегда задаёт `with_tags=true`, `with_rigman=false`, `language=
       "uuid": "A2CC4FE0-DAEA-4EDB-9B7B-9E2AF3550B81",
       "name": "Tree pose",
       "bilateral": false,
-      "image_url": "https://example.com/tree-pose.png",
       "catalog_tag_names": ["Balance", "Standing"]
     }
   ]
 }
 ```
 
-Результат передаётся модели в `ToolMessage`, UI — событием `catalog_items_found`.
+Результат передаётся модели в `ToolMessage` без image URLs и rigman
+по [контракту 009](../009-compact-gpt-tool-results/tool-contract.md).
+Полные данные, включая image URLs, остаются в `latest_catalog_items`;
+`show_catalog_items` передаёт выбранные элементы галереи в artifact и публичном
+событии `catalog_items_displayed` по [спецификации 003](../003-catalog-items-display/README.md).
 Последняя успешная выборка хранится в состоянии диалога как проверенные
 кандидаты для замены; следующий успешный поиск заменяет эту выборку целиком.
 Неуспешный поиск очищает кандидатов, чтобы не использовать старый результат

@@ -16,6 +16,7 @@ from langchain_app.services.sequence_editor import SequenceEditorError, insert_e
 from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS
 from langchain_app.services.type_safe import TypeSafeServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
+from langchain_app.tools.results import commit_sequence
 
 
 @tool
@@ -77,16 +78,7 @@ def generate_sequence(
     sequence = GeneratedSequence.from_catalog_items(
         items, request=context.user_request, parent=context.regeneration_parent,
     )
-    snapshot = sequence.model_dump(mode="json")
-    return Command(update={
-        "sequences": {str(sequence.uuid): snapshot},
-        "active_sequence_uuid": str(sequence.uuid),
-        "turn_operation_committed": True,
-        "messages": [ToolMessage(
-            content=json.dumps({"status": "ok", **snapshot}, ensure_ascii=False),
-            tool_call_id=runtime.tool_call_id or "",
-        )],
-    })
+    return commit_sequence(runtime, sequence)
 
 
 @tool
@@ -167,26 +159,14 @@ def add_sequence_elements(
         return tool_error(runtime, "addition_selection_failed", str(exc))
     except SequenceEditorError as exc:
         return tool_error(runtime, exc.code, str(exc))
-    snapshot = variant.model_dump(mode="json")
-    return Command(update={
-        "sequences": {str(variant.uuid): snapshot},
-        "active_sequence_uuid": str(variant.uuid),
-        "turn_operation_committed": True,
-        "messages": [ToolMessage(
-            content=json.dumps({
-                "status": "ok", **snapshot,
-                "addition": {
-                    "requested_count": count, "added_count": added_count,
-                    "limit_applied": count > added_count, "position": insertion_index + 1,
-                    "insert_before_element_id": str(insert_before_element_id) if insert_before_element_id else None,
-                    "elements": [
-                        {"element_id": str(element.element_id), "order": element.order}
-                        for element in variant.elements[insertion_index:insertion_index + added_count]
-                    ],
-                },
-            }, ensure_ascii=False),
-            tool_call_id=runtime.tool_call_id or "",
-        )],
+    return commit_sequence(runtime, variant, addition={
+        "requested_count": count, "added_count": added_count,
+        "limit_applied": count > added_count, "position": insertion_index + 1,
+        "insert_before_element_id": str(insert_before_element_id) if insert_before_element_id else None,
+        "elements": [
+            {"element_id": str(element.element_id), "order": element.order}
+            for element in variant.elements[insertion_index:insertion_index + added_count]
+        ],
     })
 
 
@@ -233,24 +213,12 @@ def replace_sequence_element(
             content=json.dumps({"status": "no_change", "uuid": str(source.uuid)}),
             tool_call_id=runtime.tool_call_id or "",
         )
-    snapshot = variant.model_dump(mode="json")
     old_element = next(item for item in source.elements if item.element_id == element_id)
     new_element = next(item for item in variant.elements if item.element_id == element_id)
-    return Command(update={
-        "sequences": {str(variant.uuid): snapshot},
-        "active_sequence_uuid": str(variant.uuid),
-        "turn_operation_committed": True,
-        "messages": [ToolMessage(
-            content=json.dumps({
-                "status": "ok", **snapshot,
-                "replacement": {
-                    "element_id": str(element_id), "order": old_element.order,
-                    "old_catalog_item": old_element.catalog_item.model_dump(mode="json"),
-                    "new_catalog_item": new_element.catalog_item.model_dump(mode="json"),
-                },
-            }, ensure_ascii=False),
-            tool_call_id=runtime.tool_call_id or "",
-        )],
+    return commit_sequence(runtime, variant, replacement={
+        "element_id": str(element_id), "order": old_element.order,
+        "old_catalog_item": {"id": old_element.catalog_item.id, "name": old_element.catalog_item.name},
+        "new_catalog_item": {"id": new_element.catalog_item.id, "name": new_element.catalog_item.name},
     })
 
 
@@ -295,24 +263,12 @@ def swap_sequence_elements(
             content=json.dumps({"status": "no_change", "uuid": str(source.uuid)}),
             tool_call_id=runtime.tool_call_id or "",
         )
-    snapshot = variant.model_dump(mode="json")
-    old_orders = {item.element_id: item.order for item in source.elements}
+    old_elements = {item.element_id: item for item in source.elements}
     new_orders = {item.element_id: item.order for item in variant.elements}
-    return Command(update={
-        "sequences": {str(variant.uuid): snapshot},
-        "active_sequence_uuid": str(variant.uuid),
-        "turn_operation_committed": True,
-        "messages": [ToolMessage(
-            content=json.dumps({
-                "status": "ok", **snapshot,
-                "swap": [
-                    {
-                        "element_id": str(element_id),
-                        "old_order": old_orders[element_id], "new_order": new_orders[element_id],
-                    }
-                    for element_id in (first_element_id, second_element_id)
-                ],
-            }, ensure_ascii=False),
-            tool_call_id=runtime.tool_call_id or "",
-        )],
-    })
+    return commit_sequence(runtime, variant, swap=[
+        {
+            "element_id": str(element_id), "name": old_elements[element_id].catalog_item.name,
+            "old_order": old_elements[element_id].order, "new_order": new_orders[element_id],
+        }
+        for element_id in (first_element_id, second_element_id)
+    ])

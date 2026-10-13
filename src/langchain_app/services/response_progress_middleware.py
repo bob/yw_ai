@@ -78,6 +78,11 @@ def model_response_progress(
 
 
 def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, str]:
+    """Read operation facts shared by compact results and legacy snapshots.
+
+    Composition belongs to the committed state; progress never depends on
+    an ``elements`` list in the model-visible acknowledgement.
+    """
     messages = (result.update or {}).get("messages", []) if isinstance(result, Command) else [result]
     message = next((m for m in messages if isinstance(m, ToolMessage)), None)
     if message is None:

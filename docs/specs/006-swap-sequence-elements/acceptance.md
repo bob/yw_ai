@@ -40,7 +40,9 @@ opt-in прогоном живой LLM; обычный unittest его не за
    `swap_sequence_elements` для выбранной секвенции. Возвращённый `Command`
    добавляет ровно один снимок, делает его активным и устанавливает общий
    флаг commit. Следующий model call видит новый порядок. `ToolMessage`
-   содержит полный снимок и две записи `swap` с правильными old/new positions.
+   содержит UUID, operation, count и две записи `swap` с именами и правильными
+   old/new positions по [контракту 009](../009-compact-gpt-tool-results/tool-contract.md).
+   Полный снимок доступен в состоянии, без дублирования в tool content.
 10. **Защита источника.** Отсутствие активного полного снимка даёт
     `sequence_not_found`, UUID другого варианта — `stale_sequence`,
     в том числе для сохранённого варианта той же family. Ни ошибка,

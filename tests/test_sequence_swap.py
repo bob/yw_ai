@@ -298,10 +298,13 @@ class SequenceSwapToolTests(unittest.TestCase):
                     message, = update["messages"]
                     self.assertEqual(message.tool_call_id, "swap-call")
                     self.assertEqual(json.loads(message.content), {
-                        "status": "ok", **variant.model_dump(mode="json"),
+                        "status": "ok", "uuid": str(variant.uuid),
+                        "operation": "swap", "elements_count": variant.elements_count,
                         "swap": [
-                            {"element_id": str(first.element_id), "old_order": first.order, "new_order": second.order},
-                            {"element_id": str(second.element_id), "old_order": second.order, "new_order": first.order},
+                            {"element_id": str(first.element_id), "name": first.catalog_item.name,
+                             "old_order": first.order, "new_order": second.order},
+                            {"element_id": str(second.element_id), "name": second.catalog_item.name,
+                             "old_order": second.order, "new_order": first.order},
                         ],
                     })
                     self.assertEqual(runtime.state, before)
@@ -369,7 +372,9 @@ class SequenceSwapToolTests(unittest.TestCase):
         message = model.received_messages[-1][-1]
         self.assertEqual(message.tool_call_id, model.received_messages[-1][-2].tool_calls[0]["id"])
         payload = json.loads(message.content)
-        self.assertEqual({k: v for k, v in payload.items() if k not in ("status", "swap")}, variant.model_dump(mode="json"))
+        self.assertEqual({k: v for k, v in payload.items() if k not in ("status", "swap")}, {
+            "uuid": str(variant.uuid), "operation": "swap", "elements_count": variant.elements_count,
+        })
         self.assertEqual([entry["new_order"] for entry in payload["swap"]], [5, 3])
         factory.assert_called_once()
         self.assertEqual(catalog.mock_calls, [])

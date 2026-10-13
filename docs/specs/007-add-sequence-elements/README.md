@@ -195,7 +195,10 @@ UUID первого. UUID якоря берётся из выбранного с
 Успешный инструмент возвращает один `Command`, который добавляет полный
 snapshot в `sequences` через существующий merge-reducer, устанавливает
 `active_sequence_uuid` и `turn_operation_committed=true` и добавляет `ToolMessage`
-с `status=ok`, полным новым снимком и полем `addition`:
+с `status=ok`, UUID, `operation=add`, `elements_count` и полем `addition`
+по [контракту 009](../009-compact-gpt-tool-results/tool-contract.md).
+Полный снимок остаётся в состоянии и следующем `selected_sequence`.
+Содержимое `addition`:
 
 ```json
 {
@@ -212,7 +215,7 @@ snapshot в `sequences` через существующий merge-reducer, ус�
 ```
 
 `position` — начальная позиция блока, `elements` — новые вхождения в порядке
-вставки; полные catalog items доступны в том же snapshot.
+вставки; полные catalog items доступны в snapshot из `state.sequences`.
 `limit_applied = requested_count > added_count`.
 `no_change` при лимите содержит `uuid`, `code`, `message`, `requested_count`,
 `added_count=0` и `limit_applied=true`, без нового снимка.

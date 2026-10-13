@@ -12,6 +12,7 @@ from langchain_app.schemas.catalog import CatalogItemSchema
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.services.catalog_errors import CatalogServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
+from langchain_app.tools.results import catalog_item_result
 
 
 @tool
@@ -52,7 +53,7 @@ def search_catalog_items(
     result = {
         "status": "ok", "language": "en", "returned_count": len(items),
         "limit": limit,
-        "items": snapshots,
+        "items": [catalog_item_result(item) for item in items],
     }
     return Command(update={
         "latest_catalog_items": snapshots,
