@@ -1,0 +1,176 @@
+{
+  "mode": "live GPT semantic check with offline services",
+  "model": "gpt-5.5",
+  "review": {
+    "date": "2026-10-13",
+    "method": "Manual review of the saved summaries and real GPT replies",
+    "preserved_explicit_preference": true,
+    "honored_later_cancellation": true,
+    "one_off_constraint_not_made_permanent": true,
+    "asked_to_clarify_missing_reference_with_selected_sequence": true,
+    "final_scenarios_usage": {
+      "normal_calls": 3,
+      "summary_calls": 3,
+      "input_tokens": 31127,
+      "output_tokens": 507,
+      "cache_read_tokens": 15104,
+      "actual_cost": null
+    },
+    "superseded_check_without_selected_sequence": {
+      "normal_calls": 1,
+      "summary_calls": 1,
+      "input_tokens": 9779,
+      "output_tokens": 147,
+      "cache_read_tokens": 2688,
+      "sequence_operation_performed": false
+    },
+    "unmeasured_initial_attempt": {
+      "normal_calls": 1,
+      "summary_calls": 1,
+      "usage": null,
+      "reason": "Initial capture hook at _generate was bypassed by automatic streaming; the harness assertion failed after the replies. Capture was moved to invoke."
+    },
+    "limitations": "These semantic checks are separate from the offline 50-turn comparison. Not every earlier attempt has saved usage; total live-test billing cannot be reconstructed."
+  },
+  "rows": [
+    {
+      "scenario": "preserved_preference",
+      "user_request": "Какие мои постоянные пожелания ты помнишь?",
+      "summary": {
+        "ongoing_preferences": [
+          "В будущих практиках избегать стоячих поз."
+        ],
+        "current_goal": "Пользователь просил объяснить, что такое мягкая практика.",
+        "pending_clarification": null,
+        "relevant_facts": [],
+        "response_language": "русский"
+      },
+      "reply": "Я помню одно постоянное пожелание: в будущих практиках избегать стоячих поз.",
+      "normal_calls": 1,
+      "summary_calls": 1,
+      "normal_usage": [
+        {
+          "input_tokens": 4049,
+          "output_tokens": 24,
+          "total_tokens": 4073,
+          "input_token_details": {
+            "audio": 0,
+            "cache_read": 2688
+          },
+          "output_token_details": {
+            "audio": 0,
+            "reasoning": 0
+          }
+        }
+      ],
+      "summary_usage": [
+        {
+          "covered_from": 0,
+          "covered_until": 24,
+          "estimated_input_tokens": 5743,
+          "input_tokens": 5742,
+          "output_tokens": 57,
+          "cache_read_tokens": 4864,
+          "status": "ok"
+        }
+      ],
+      "catalog_calls": 0,
+      "generator_calls": 0,
+      "jev_calls": 0
+    },
+    {
+      "scenario": "cancellation_and_one_off",
+      "user_request": "Какие ограничения действуют для будущих практик?",
+      "summary": {
+        "ongoing_preferences": [],
+        "current_goal": "Объяснить, что такое мягкая практика йоги.",
+        "pending_clarification": null,
+        "relevant_facts": [
+          "Пользователь отменил прежний запрет на стоячие позы; их можно включать в будущие практики.",
+          "Ограничение «не использовать скручивания» было указано только для одного запроса и не является постоянным."
+        ],
+        "response_language": "русский"
+      },
+      "reply": "Для будущих практик сейчас действуют такие ограничения и предпочтения:\n\n- **Стоячие позы разрешены** — прежний запрет на них отменён.\n- **Постоянного запрета на скручивания нет** — ограничение «не использовать скручивания» относилось только к одному прошлому запросу.\n- Других постоянных ограничений или предпочтений сейчас не зафиксировано.\n\nЕсли хочешь, можешь задать новые правила для следующих практик, например: «без стоячих поз», «мягкая практика», «без прогибов», «для спины», «15 минут» и т.д.",
+      "normal_calls": 1,
+      "summary_calls": 1,
+      "normal_usage": [
+        {
+          "input_tokens": 4085,
+          "output_tokens": 136,
+          "total_tokens": 4221,
+          "input_token_details": {
+            "audio": 0,
+            "cache_read": 2688
+          },
+          "output_token_details": {
+            "audio": 0,
+            "reasoning": 0
+          }
+        }
+      ],
+      "summary_usage": [
+        {
+          "covered_from": 0,
+          "covered_until": 28,
+          "estimated_input_tokens": 6229,
+          "input_tokens": 6228,
+          "output_tokens": 94,
+          "cache_read_tokens": 0,
+          "status": "ok"
+        }
+      ],
+      "catalog_calls": 0,
+      "generator_calls": 0,
+      "jev_calls": 0
+    },
+    {
+      "scenario": "missing_reference",
+      "user_request": "Замени её на другую.",
+      "summary": {
+        "ongoing_preferences": [
+          "Отвечать по-русски."
+        ],
+        "current_goal": "Обсудить и объяснить, что такое мягкая практика йоги.",
+        "pending_clarification": null,
+        "relevant_facts": [
+          "Пользователь многократно просил объяснить понятие «мягкая практика». Предыдущие ответы фактически не дали содержательного объяснения."
+        ],
+        "response_language": "русский"
+      },
+      "reply": "Уточните, пожалуйста, что именно заменить: какую позу в текущей последовательности и на какую новую позу или тип позы?\n\nНапример:\n- «Замени 3-ю позу на скрутку»\n- «Замени Seated pose 5 на другую мягкую сидячую позу»\n- «Замени последнюю позу на наклон вперёд»\n\nСейчас в выбранной последовательности 9 поз, поэтому мне нужен номер или точное название заменяемой позы.",
+      "normal_calls": 1,
+      "summary_calls": 1,
+      "normal_usage": [
+        {
+          "input_tokens": 5284,
+          "output_tokens": 110,
+          "total_tokens": 5394,
+          "input_token_details": {
+            "audio": 0,
+            "cache_read": 0
+          },
+          "output_token_details": {
+            "audio": 0,
+            "reasoning": 0
+          }
+        }
+      ],
+      "summary_usage": [
+        {
+          "covered_from": 0,
+          "covered_until": 24,
+          "estimated_input_tokens": 5740,
+          "input_tokens": 5739,
+          "output_tokens": 86,
+          "cache_read_tokens": 4864,
+          "status": "ok"
+        }
+      ],
+      "catalog_calls": 0,
+      "generator_calls": 0,
+      "jev_calls": 0,
+      "selected_sequence_uuid": "0b580b49-2d25-59e8-b0b2-32e3ba44001f"
+    }
+  ]
+}

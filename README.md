@@ -110,6 +110,17 @@ reruns retain it. Recovery after a process restart or a new browser session is n
 implemented. Legacy cards with thumbnails alone remain viewable without supplying
 invented catalog data to the model.
 
+GPT receives recent whole turns plus a cumulative summary when completed history
+exceeds its token budget. The full transcript and sequence variants remain in
+session state, and the current request and tool loop are always retained.
+Set `ASSISTANT_HISTORY_MAX_TOKENS` (8192), `ASSISTANT_HISTORY_TARGET_TOKENS`
+(4096), and `ASSISTANT_HISTORY_SUMMARY_MAX_TOKENS` (768), with
+`0 < summary_max < target < max`. These budgets include the summary; system
+instructions, tools, the selected snapshot and the current turn are separate.
+Summarization uses the same GPT model without tools, at most once per request.
+Failure preserves the previous summary and uses a bounded recent suffix.
+See [feature 010: bounded GPT history](docs/specs/010-bounded-gpt-history/README.md).
+
 Chat, **Generate**, and **Regenerate** show a live execution block immediately.
 It follows real model and catalog work, streams provisional poses, and collapses
 when the response finishes. Public intermediate messages, completed steps, elapsed

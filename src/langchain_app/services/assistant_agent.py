@@ -26,6 +26,7 @@ from langchain_app.schemas.response_progress import (
     SequenceCommittedEvent,
     SequenceElementEvent,
 )
+from langchain_app.services.assistant_history import BoundedHistoryMiddleware, HistoryBudget
 from langchain_app.services.catalog_item import CatalogItemService
 from langchain_app.services.catalog_tag import CatalogTagService
 from langchain_app.services.request_errors import public_request_error
@@ -207,11 +208,15 @@ class AssistantAgent:
         catalog_item_service: CatalogItemService,
         catalog_tag_service: CatalogTagService,
         model: str | BaseChatModel = "openai:gpt-5.5",
+        history_budget: HistoryBudget | None = None,
+        summary_model: BaseChatModel | None = None,
     ) -> None:
         self._generator_factory = generator_factory
         self._catalog_item_service = catalog_item_service
         self._catalog_tag_service = catalog_tag_service
         self._model = model
+        self._history_budget = history_budget or HistoryBudget.from_environment()
+        self._summary_model = summary_model
         self._agent: _AssistantGraph | None = None
         self._checkpointer = InMemorySaver()
         self._config: RunnableConfig = {
@@ -263,12 +268,22 @@ class AssistantAgent:
                 model=model, tools=list(ASSISTANT_TOOLS), system_prompt=SYSTEM_PROMPT,
                 context_schema=AssistantToolContext, state_schema=AssistantState,
                 middleware=[
+                    BoundedHistoryMiddleware(model, self._history_budget, self._get_summary_model),
                     model_response_progress, selected_sequence_context, invalidate_catalog_candidates,
                     tool_response_progress, sequential_tool_calls,
                 ],
                 checkpointer=self._checkpointer,
             )
         return self._agent
+
+    def _get_summary_model(self) -> BaseChatModel:
+        """A separate unbound model call, with no agent loop or provider retries."""
+        if self._summary_model is None:
+            self._summary_model = (
+                init_chat_model(self._model, timeout=60, max_retries=0)
+                if isinstance(self._model, str) else self._model
+            )
+        return self._summary_model
 
     def _complete_failed_tool_calls(self) -> None:
         """Keep history valid when a tool raises after streaming partial progress."""
@@ -329,9 +344,11 @@ class AssistantAgent:
                 regeneration_parent=parent,
             )
             agent = self._get_agent()
+            self._complete_failed_tool_calls()
             inputs: AssistantInputState = {
                 "messages": [{"role": "user", "content": request}],
                 "turn_operation_committed": False,
+                "history_turn_start": len(self.state.get("messages", [])),
             }
             if parent is not None:
                 inputs["active_sequence_uuid"] = str(parent.uuid)

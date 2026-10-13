@@ -438,6 +438,7 @@ dependencies = [
     { name = "langchain-typesafe" },
     { name = "pydantic" },
     { name = "streamlit" },
+    { name = "tiktoken" },
     { name = "typesafe-sdk" },
 ]
 
@@ -449,6 +450,7 @@ requires-dist = [
     { name = "langchain-typesafe", specifier = ">=0.0.1a3" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "streamlit", specifier = ">=1.64.0" },
+    { name = "tiktoken", specifier = ">=0.14.0" },
     { name = "typesafe-sdk", specifier = ">=0.7.1" },
 ]
 

@@ -59,3 +59,11 @@ Offline scripted model фиксирует полный исходящий спи
 summary calls, input/output/cache-read tokens, размеры последних запросов.
 Выполнить существующие проверки истории вариантов, addition/swap/replacement,
 progress, ошибок и AppTest. Записать результаты в README после реализации.
+
+## 5. Результаты реализации
+
+Проверено 2026-10-13. Acceptance tests:
+[`test_assistant_history.py`](../../../tests/test_assistant_history.py).
+Fixture измерений и отдельной семантической проверки:
+[`bounded_history.py`](../../../tests/fixtures/bounded_history.py).
+Итоги и ограничения измерений: [README, раздел 8](README.md#8-реализация-и-проверка).

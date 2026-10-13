@@ -1,6 +1,6 @@
 # 010 — Ограниченная история в запросах GPT
 
-Статус: **спецификация; реализация не начата**.
+Статус: **реализовано и проверено 2026-10-13**.
 
 Источник задачи — пункт 4 [анализа расхода токенов](../../token-usage-and-optimization.md).
 Рекомендуемый порядок реализации: после
@@ -147,3 +147,113 @@ transcript и snapshots для baseline/after, с превышением max. П
 [LangChain — Short-term memory](https://docs.langchain.com/oss/python/langchain/short-term-memory).
 Встроенная суммаризация может удалять messages; её нельзя подключать без
 адаптации, если это нарушит сохранение канонического transcript этой фичи.
+
+## 8. Реализация и проверка
+
+[`BoundedHistoryMiddleware`](../../../src/langchain_app/services/assistant_history.py)
+готовит проекцию в `before_agent`, сохраняет метаданные через checkpointer
+и подменяет только `ModelRequest.messages` в `wrap_model_call`.
+Сводка валидируется по строгой JSON-схеме: постоянные явно заявленные
+предпочтения, цель, актуальное уточнение, короткие факты и выбранный язык.
+Невалидный JSON, лишние поля, пустой ответ, отказ, tool calls и превышение
+output/target budget приводят к fallback без обновления сводки и coverage.
+
+`AssistantAgent` передаёт offset начала реального запроса после восстановления
+незакрытых tools. Сохранённые offsets задают границы завершённых ходов;
+наличие финального assistant text не требуется. Transcript старой сессии без
+offsets рассматривается как один неделимый префикс. Уже покрытые сообщения
+не входят в новые summary inputs или raw suffix. Для suffix резервируется
+максимум сводки с контекстной рамкой; вся итоговая проекция проверяется
+перед сохранением coverage.
+
+Параметры валидируются при создании `AssistantAgent`, defaults приведены
+в [`.env.example`](../../../.env.example). Summarizer лениво создаётся
+с той же моделью, `timeout=60`, `max_retries=0`, без tools. Для GPT-5 используется
+`reasoning_effort=none`, чтобы output cap ограничивал полезный JSON, а не
+скрытые reasoning tokens. При внедрении собственного model object transport
+settings задаёт вызывающая сторона. Суммаризатор не вызывает каталог,
+generator/TypeSafe и не создаёт sequence commit.
+
+Каждая попытка записывается в `history_summary_calls`: coverage, оценка input,
+известный provider input/output/cache-read usage и исход. При transport error
+неизвестный usage остаётся `null`, а не объявляется нулевым расходом.
+Progress использует существующий шаг `thinking` для реального summary call.
+UI, карточки, Save и execution history не содержат служебную сводку.
+
+Счётчик GPT-5.5 использует **tiktoken 0.14.0 / o200k_base** и оценку framing
+из установленного `langchain-openai`. Это не точный billing counter: framing
+tools у провайдера может отличаться. Для неизвестного tokenizer применяется
+явно обозначенный `fallback:o200k_base`: сериализация видимых полей и запас 25%.
+На том же полном 50-turn fixture fallback дал **44 379** против **34 303**,
+то есть **+29,37%**. Это наблюдаемая погрешность, а не универсальная граница
+для неизвестных моделей. Artifacts, usage metadata и внутренние message IDs
+в fallback не входят.
+
+Проверки:
+
+```bash
+uv run python -m unittest discover -s tests -p 'test_assistant_history.py'
+uv run python -m unittest discover -s tests
+uv run python tests/fixtures/bounded_history.py --output docs/specs/010-bounded-gpt-history/token-results.json
+uv run --env-file .env python tests/fixtures/bounded_history.py --live --output docs/specs/010-bounded-gpt-history/semantic-results.json
+```
+
+- **13** новых acceptance tests проверяют короткий Generate 9 → добавить 3
+  без summary, целые tool batches, большой текущий ход, повторную coverage,
+  ошибки/невалидные ответы, восстановление tools, сохранение сводки при сбое
+  основного GPT, legacy generation/replacement/swap/addition results,
+  изоляцию сессий, старый выбранный вариант и budgets.
+- AppTest после суммаризации проверяет исходную карточку, Save, swap,
+  Previous/Next, rerun и отсутствие дополнительных model/summary calls.
+- Общая проверка: **296 tests, OK**; включает прежние tests вариантов,
+  addition/swap/replacement, progress, API credit errors, каталога и AppTest.
+
+### Полный offline-сценарий на 50 ходах
+
+Fixture выполняет настоящий agent/checkpointer loop с scripted GPT и fake
+summarizer. Baseline 009 и after 010 имеют одинаковые 100 канонических сообщений
+и snapshots; совпадение подтверждено SHA-256. Scripted models фиксируют полный
+список исходящих сообщений; посчитаны все normal и summary inputs/outputs.
+Normal input включает system, snapshot и сериализованные tool schemas.
+Полные данные: [`token-results.json`](token-results.json).
+
+| Показатель | Baseline 009 | After 010 |
+| --- | ---: | ---: |
+| Normal calls | 50 | 50 |
+| Summary calls | 0 | 5 |
+| Normal input tokens | 1 104 500 | 505 456 |
+| Normal output tokens | 19 650 | 19 650 |
+| Summary input tokens | 0 | 30 152 |
+| Summary output tokens | 0 | 225 |
+| Все GPT input/output tokens | **1 124 150** | **555 483** |
+| История в последнем запросе | 33 617 | 6 299 |
+| Последний запрос вместе с tools | 38 897 | 11 579 |
+
+Суммаризации произошли перед ходами 13, 21, 29, 37 и 45; каждый раз завершённая
+проекция после сокращения была **2 869 ≤ 4 096**. В остальных запросах она
+оставалась в пределах **8 192**. Снижение общего расчётного числа токенов —
+**50,59%**, уже с расходом на суммаризацию. Это offline-оценка, а не измерение
+стоимости: реального cache-read usage на 50-turn fixture нет. Изменение cache
+prefix и итоговая billed cost здесь не измерялись.
+
+### Семантическая проверка GPT
+
+На GPT-5.5 с fake services, без Jev API, проверены три сценария: сохранение
+запрета стоячих поз из старого user message; явная отмена запрета и разовое
+ограничение скручиваний; неоднозначная ссылка «замени её» при выбранной
+последовательности. В последнем случае GPT запросил номер/название позы и замену.
+Во всех сценариях **0 catalog/generator/Jev calls**. Ответы и реальный provider
+usage: [`semantic-results.json`](semantic-results.json).
+
+Для трёх финальных сценариев: **3 normal + 3 summary calls**, **31 127 input**,
+**507 output**, **15 104 cache-read tokens**. Предыдущая проверка ссылки без
+выбранной последовательности также не сделала операцию: **1 normal + 1 summary**,
+**9 779 input**, **147 output**, **2 688 cache-read**. Первый запуск остановился
+из-за ошибки capture hook: автоматический streaming LangChain обошёл
+`_generate`; его два вызова не имеют сохранённого usage. Capture исправлен
+на уровне `invoke`. Эти расходы не подменяют offline baseline/after сравнение
+и не доказывают качество суммаризации любого возможного диалога.
+
+Интеграция сверена с актуальными
+[custom middleware](https://docs.langchain.com/oss/python/langchain/middleware/custom)
+и [short-term memory](https://docs.langchain.com/oss/python/langchain/short-term-memory).

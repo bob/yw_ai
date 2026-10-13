@@ -14,6 +14,7 @@ def merge_sequences(previous: dict, incoming: dict) -> dict:
 class AssistantInputState(InputAgentState):
     active_sequence_uuid: NotRequired[str | None]
     turn_operation_committed: NotRequired[bool]
+    history_turn_start: NotRequired[int]
 
 
 class AssistantState(AgentState):
@@ -21,3 +22,12 @@ class AssistantState(AgentState):
     active_sequence_uuid: NotRequired[str | None]
     latest_catalog_items: NotRequired[list[dict]]
     turn_operation_committed: NotRequired[bool]
+    history_turn_start: NotRequired[int]
+    history_turn_starts: NotRequired[list[int]]
+    history_summary: NotRequired[str]
+    history_summary_covered_until: NotRequired[int]
+    history_projection_start: NotRequired[int]
+    history_projection_version: NotRequired[int]
+    history_context_incomplete: NotRequired[bool]
+    history_token_counter: NotRequired[str]
+    history_summary_calls: NotRequired[list[dict]]
