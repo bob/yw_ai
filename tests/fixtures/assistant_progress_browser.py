@@ -36,7 +36,7 @@ class BrowserModel(FakeMessagesListChatModel):
         return self
 
     def _generate(self, messages, **kwargs):
-        wait_for("model" if isinstance(messages[-1], HumanMessage) else "reply")
+        wait_for("model" if isinstance(messages[-2], HumanMessage) else "reply")
         result = super()._generate(messages, **kwargs)
         for generation in result.generations:
             generation.message = generation.message.model_copy(deep=True)

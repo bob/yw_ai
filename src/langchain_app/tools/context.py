@@ -26,6 +26,7 @@ class AssistantToolContext:
     generation_started: bool = False
     generation_completed: bool = False
     catalog_items_displayed: bool = False
+    request_id: str | None = None
 
 
 def tool_error[ContextT, StateT](

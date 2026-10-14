@@ -15,7 +15,7 @@ from langchain_app.services.catalog_item import CatalogItemApiError
 from langchain_app.services.sequence_editor import insert_elements, swap_elements
 from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.services.type_safe import TypeSafeSelectionError
-from test_assistant_agent import ToolCallingModel, assistant, pose, tool_call, tool_model
+from test_assistant_agent import last_message, ToolCallingModel, assistant, pose, tool_call, tool_model
 from test_sequence_addition_tool import addition_call
 from test_sequence_insertion import pose as addition_pose, source as addition_source
 from test_sequence_swap import sequence, swap_call
@@ -147,7 +147,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def followup(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage) and messages[-1].artifact is not None:
+            if isinstance(last_message(messages), ToolMessage) and last_message(messages).artifact is not None:
                 self.wait(allow_reply)
             return original(model_instance, messages, **kwargs)
 
@@ -237,7 +237,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
                 original = ToolCallingModel._generate
 
                 def fail_reply(model_instance, messages, **kwargs):
-                    if isinstance(messages[-1], ToolMessage) and (not show or messages[-1].artifact is not None):
+                    if isinstance(last_message(messages), ToolMessage) and (not show or last_message(messages).artifact is not None):
                         raise ValueError("secret model failure")
                     return original(model_instance, messages, **kwargs)
 
@@ -332,7 +332,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def followup(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage):
+            if isinstance(last_message(messages), ToolMessage):
                 self.wait(allow_reply)
             return original(model_instance, messages, **kwargs)
 
@@ -400,7 +400,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def reply(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage):
+            if isinstance(last_message(messages), ToolMessage):
                 self.wait(reply_gate)
             return original(model_instance, messages, **kwargs)
 
@@ -491,7 +491,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def fail_reply(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage):
+            if isinstance(last_message(messages), ToolMessage):
                 raise AssistantAgentError("Model unavailable")
             return original(model_instance, messages, **kwargs)
 
@@ -614,7 +614,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def fail_reply(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage):
+            if isinstance(last_message(messages), ToolMessage):
                 raise ValueError("secret model failure")
             return original(model_instance, messages, **kwargs)
 
@@ -699,7 +699,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
             return swap_elements(*args, **kwargs)
 
         def followup(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
+            if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "swap_sequence_elements":
                 self.wait(allow_reply)
             return original(model_instance, messages, **kwargs)
 
@@ -734,7 +734,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         self.assertEqual(committed.step_id, step.step_id)
         self.assertEqual(committed.tool_call_id, step.tool_call_id)
         self.assertEqual(finish.tool_call_id, step.tool_call_id)
-        self.assertEqual(model.received_messages[-1][-1].tool_call_id, step.tool_call_id)
+        self.assertEqual(model.received_messages[-1][-2].tool_call_id, step.tool_call_id)
         self.assertLess(step.event_index, committed.event_index)
         self.assertLess(committed.event_index, finish.event_index)
         self.assertFalse(any(e.type in ("sequence_element", "catalog_items_displayed") for e in events))
@@ -780,7 +780,7 @@ class ResponseProgressStreamTests(unittest.TestCase):
         original = ToolCallingModel._generate
 
         def fail_followup(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
+            if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "swap_sequence_elements":
                 raise RuntimeError("Private model failure")
             return original(model_instance, messages, **kwargs)
 

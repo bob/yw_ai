@@ -19,6 +19,11 @@ from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.tools import ASSISTANT_TOOLS
 
 
+def last_message(messages):
+    """The final conversational message precedes the request-only snapshot tail."""
+    return messages[-2] if isinstance(messages[-1], SystemMessage) else messages[-1]
+
+
 class ToolCallingModel(FakeMessagesListChatModel):
     received_requests: list[str] = Field(default_factory=list)
     received_messages: list[list] = Field(default_factory=list)
@@ -30,8 +35,8 @@ class ToolCallingModel(FakeMessagesListChatModel):
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         self.received_messages.append(list(messages))
-        if isinstance(messages[-1], HumanMessage):
-            self.received_requests.append(messages[-1].content)
+        if isinstance(last_message(messages), HumanMessage):
+            self.received_requests.append(last_message(messages).content)
         result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
         # Every real model response has a new identity, including repeated calls.
         for generation in result.generations:
@@ -71,7 +76,7 @@ def assistant(factory, **kwargs):
 
 
 def selected_snapshot(model, call_index=-1):
-    system_message = model.received_messages[call_index][0]
+    system_message = model.received_messages[call_index][-1]
     context = system_message.content_blocks[-1]["text"]
     payload = next(line for line in context.splitlines() if line.startswith('{"selected_sequence":'))
     return json.loads(payload)["selected_sequence"]
@@ -239,8 +244,8 @@ class AssistantAgentTests(unittest.TestCase):
             name="Tree", uuid=None, bilateral=False, catalog_tag_names=["Standing"],
             with_tags=True, with_rigman=False, limit=10, rand=False,
         )
-        tag_message = model.received_messages[1][-1]
-        search_message = model.received_messages[2][-1]
+        tag_message = model.received_messages[1][-2]
+        search_message = model.received_messages[2][-2]
         self.assertIsInstance(tag_message, ToolMessage)
         self.assertEqual(json.loads(tag_message.content)["tag_names"], ["Balance", "Standing"])
         result = json.loads(search_message.content)
@@ -261,7 +266,7 @@ class AssistantAgentTests(unittest.TestCase):
         ])
         self.assertEqual(list(assistant(lambda: generator, model=model).stream("Практика из одной асаны")),
                          [generated, reply])
-        result = json.loads(model.received_messages[1][-1].content)
+        result = json.loads(model.received_messages[1][-2].content)
         self.assertEqual(set(result), {"status", "uuid", "operation", "elements_count"})
         self.assertEqual(result["operation"], "generate")
         self.assertEqual(result["elements_count"], 1)
@@ -312,8 +317,8 @@ class AssistantAgentTests(unittest.TestCase):
         generator.generate.assert_called_once_with(
             "46 poses", language="en", count=45, starting_catalog_item_id=None, progress_observer=ANY,
         )
-        self.assertEqual(model.received_messages[1][-1].status, "error")
-        self.assertIn("less than or equal to 45", model.received_messages[1][-1].content)
+        self.assertEqual(model.received_messages[1][-2].status, "error")
+        self.assertIn("less than or equal to 45", model.received_messages[1][-2].content)
 
     def test_invalid_duration_does_not_start_generation(self):
         for duration in (0, -1, float("inf"), float("nan")):
@@ -325,7 +330,7 @@ class AssistantAgentTests(unittest.TestCase):
                 ]))
                 list(service.stream("practice"))
                 factory.assert_not_called()
-                self.assertEqual(service._model.received_messages[1][-1].status, "error")
+                self.assertEqual(service._model.received_messages[1][-2].status, "error")
 
     def test_generator_cannot_commit_or_stream_more_than_45_elements(self):
         generator = Mock()
@@ -338,7 +343,7 @@ class AssistantAgentTests(unittest.TestCase):
         output = list(service.stream("45 poses"))
         self.assertEqual(len([value for value in output if isinstance(value, CatalogItemSchema)]), 45)
         self.assertIsNone(service.active_sequence_uuid)
-        message = model.received_messages[1][-1]
+        message = model.received_messages[1][-2]
         self.assertEqual(message.status, "error")
         self.assertEqual(json.loads(message.content)["code"], "sequence_limit_exceeded")
 
@@ -349,7 +354,7 @@ class AssistantAgentTests(unittest.TestCase):
         model = ToolCallingModel(responses=[tool_call("search_catalog_items", name="Tree"), AIMessage(content=reply)])
         self.assertEqual(list(assistant(Mock(), model=model, catalog_item_service=catalog).stream("Найди дерево")),
                          [reply])
-        message = model.received_messages[1][-1]
+        message = model.received_messages[1][-2]
         self.assertEqual(message.status, "error")
         self.assertEqual(json.loads(message.content)["code"], "invalid_api_response")
 
@@ -359,7 +364,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(list(assistant(Mock(), model=model, catalog_item_service=catalog).stream("Покажи все")),
                          ["Уточните поиск"])
         catalog.search.assert_not_called()
-        self.assertEqual(model.received_messages[1][-1].status, "error")
+        self.assertEqual(model.received_messages[1][-2].status, "error")
 
     def test_replacement_without_selected_context_returns_explicit_error(self):
         model = ToolCallingModel(responses=[
@@ -372,7 +377,7 @@ class AssistantAgentTests(unittest.TestCase):
         factory = Mock()
         self.assertEqual(list(assistant(factory, model=model).stream("Замени третью асану")),
                          ["Сначала нужен выбранный вариант секвенции."])
-        message = model.received_messages[1][-1]
+        message = model.received_messages[1][-2]
         self.assertEqual(message.status, "error")
         self.assertEqual(json.loads(message.content)["code"], "sequence_not_found")
         factory.assert_not_called()
@@ -387,7 +392,7 @@ class AssistantAgentTests(unittest.TestCase):
         ])
         list(assistant(lambda: generator, model=model).generate("practice"))
         generator.generate.assert_called_once()
-        message = model.received_messages[2][-1]
+        message = model.received_messages[2][-2]
         self.assertEqual(json.loads(message.content)["code"], "operation_already_started")
 
     def test_complete_serializable_snapshot_keeps_occurrences_and_items_without_images(self):
@@ -448,7 +453,7 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(service.state["sequences"], {snapshot["uuid"]: snapshot})
         self.assertFalse(any(isinstance(message, SystemMessage) for message in service.state["messages"]))
         generator.generate.assert_called_once()
-        self.assertEqual(len(model.received_messages[-1][0].content_blocks), 2)
+        self.assertEqual(len(model.received_messages[-1][0].content_blocks), 1)
 
     def test_selecting_an_older_variant_overrides_newer_tool_history_without_model_calls(self):
         generator = Mock()

@@ -51,7 +51,7 @@ requests with a higher count or longer duration. If neither is specified, the
 agent uses 9 poses. See [feature 005: sequence duration and limit](docs/specs/005-sequence-duration-and-limit/README.md).
 **Regenerate** resends the original prompt. Set `ASSISTANT_AGENT_MODEL`
 to change the model. A nonempty `SEQUENCE_AGENT_MODEL` remains a fallback for
-existing `.env` files; the default is `openai:gpt-5.5`.
+existing `.env` files; the default is `openai:gpt-4.1`.
 The agent requires `OPENAI_API_KEY` in addition to the existing
 catalog and TypeSafe settings.
 
@@ -120,6 +120,20 @@ instructions, tools, the selected snapshot and the current turn are separate.
 Summarization uses the same GPT model without tools, at most once per request.
 Failure preserves the previous summary and uses a bounded recent suffix.
 See [feature 010: bounded GPT history](docs/specs/010-bounded-gpt-history/README.md).
+
+Model requests keep instructions and the ordered tool schemas stable, then send
+the current selected sequence as a separate final system message. This snapshot
+is never appended to the stored transcript. OpenAI calls use a stable per-session
+`prompt_cache_key`, with separate keys for assistant and history-summary calls.
+`ASSISTANT_PROMPT_CACHE_ENABLED` defaults to `true`; setting it to `false` stops
+sending cache settings (OpenAI's automatic caching can still apply).
+For `gpt-4.1`, retention defaults to `in_memory`; set
+`ASSISTANT_PROMPT_CACHE_RETENTION=24h` to request extended retention. Explicit
+unsupported settings fail at initialization. Internal `AssistantAgent.model_usage`
+records reported input, cached input, output, and reasoning tokens per request,
+including summarization; missing usage remains unknown. Cache hits and savings
+depend on the provider. The canceled feature 011's routing and local completion
+are not used. See [feature 012: GPT prompt caching](docs/specs/012-gpt-prompt-caching/README.md).
 
 Chat, **Generate**, and **Regenerate** show a live execution block immediately.
 It follows real model and catalog work, streams provisional poses, and collapses

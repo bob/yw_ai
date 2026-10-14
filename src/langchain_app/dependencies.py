@@ -63,6 +63,6 @@ def get_assistant_agent(
         model=(
             os.getenv("ASSISTANT_AGENT_MODEL", "").strip()
             or os.getenv("SEQUENCE_AGENT_MODEL", "").strip()
-            or "openai:gpt-5.5"
+            or "openai:gpt-4.1"
         ),
     )

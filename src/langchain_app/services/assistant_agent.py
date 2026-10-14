@@ -27,6 +27,9 @@ from langchain_app.schemas.response_progress import (
     SequenceElementEvent,
 )
 from langchain_app.services.assistant_history import BoundedHistoryMiddleware, HistoryBudget
+from langchain_app.services.prompt_cache import (
+    PromptCacheSession, PromptCacheSettings, PromptCachingMiddleware, prefix_version,
+)
 from langchain_app.services.catalog_item import CatalogItemService
 from langchain_app.services.catalog_tag import CatalogTagService
 from langchain_app.services.request_errors import public_request_error
@@ -36,6 +39,8 @@ from langchain_app.services.response_progress_middleware import (
     tool_response_progress,
 )
 from langchain_app.services.sequence_context import (
+    GENERATION_INSTRUCTION,
+    SELECTED_SEQUENCE_INSTRUCTIONS,
     invalidate_catalog_candidates,
     selected_sequence_context,
     sequential_tool_calls,
@@ -207,9 +212,10 @@ class AssistantAgent:
         *,
         catalog_item_service: CatalogItemService,
         catalog_tag_service: CatalogTagService,
-        model: str | BaseChatModel = "openai:gpt-5.5",
+        model: str | BaseChatModel = "openai:gpt-4.1",
         history_budget: HistoryBudget | None = None,
         summary_model: BaseChatModel | None = None,
+        prompt_cache_settings: PromptCacheSettings | None = None,
     ) -> None:
         self._generator_factory = generator_factory
         self._catalog_item_service = catalog_item_service
@@ -217,11 +223,21 @@ class AssistantAgent:
         self._model = model
         self._history_budget = history_budget or HistoryBudget.from_environment()
         self._summary_model = summary_model
+        cache_settings = prompt_cache_settings or PromptCacheSettings.from_environment()
+        cache_settings.validate_model(model)
+        if summary_model is not None:
+            cache_settings.validate_model(summary_model)
+        self._prompt_cache = PromptCacheSession(cache_settings)
         self._agent: _AssistantGraph | None = None
         self._checkpointer = InMemorySaver()
         self._config: RunnableConfig = {
             "configurable": {"thread_id": str(uuid4())}, "recursion_limit": 20,
         }
+
+    @property
+    def model_usage(self) -> list[dict]:
+        """Detached internal usage records, including summary calls and failures."""
+        return self._prompt_cache.records
 
     @property
     def state(self) -> AssistantState:
@@ -268,8 +284,13 @@ class AssistantAgent:
                 model=model, tools=list(ASSISTANT_TOOLS), system_prompt=SYSTEM_PROMPT,
                 context_schema=AssistantToolContext, state_schema=AssistantState,
                 middleware=[
-                    BoundedHistoryMiddleware(model, self._history_budget, self._get_summary_model),
+                    BoundedHistoryMiddleware(model, self._history_budget, self._get_summary_model,
+                                             prompt_cache=self._prompt_cache),
                     model_response_progress, selected_sequence_context, invalidate_catalog_candidates,
+                    PromptCachingMiddleware(self._prompt_cache, prefix_version(
+                        SYSTEM_PROMPT, ASSISTANT_TOOLS,
+                        context_instructions=SELECTED_SEQUENCE_INSTRUCTIONS + GENERATION_INSTRUCTION,
+                    )),
                     tool_response_progress, sequential_tool_calls,
                 ],
                 checkpointer=self._checkpointer,
@@ -342,6 +363,7 @@ class AssistantAgent:
                 catalog_tag_service=self._catalog_tag_service,
                 user_request=request, require_generation=require_generation,
                 regeneration_parent=parent,
+                request_id=str(progress.request_id),
             )
             agent = self._get_agent()
             self._complete_failed_tool_calls()

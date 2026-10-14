@@ -79,7 +79,7 @@ def measure():
             summary_before = len(summarizer.received_messages)
             list(service.stream(request))
             outgoing = model.received_messages[-1]
-            history_tokens = COUNTER.messages(outgoing[1:-1])
+            history_tokens = COUNTER.messages(outgoing[1:-2])
             summarized = len(summarizer.received_messages) > summary_before
             if bounded:
                 assert history_tokens <= 8192

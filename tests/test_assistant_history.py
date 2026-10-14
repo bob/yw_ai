@@ -103,7 +103,7 @@ class AssistantHistoryTests(unittest.TestCase):
         self.assertEqual(summarizer.received_messages, [])
         self.assertNotIn("history_summary", service.state)
         self.assertEqual(service.state["history_turn_starts"], [0, 4])
-        self.assertEqual(model.received_messages[2][1:], service.state["messages"][:5])
+        self.assertEqual(model.received_messages[2][1:-1], service.state["messages"][:5])
 
     def test_one_summary_per_request_and_large_current_tool_loop_is_untouched(self):
         service, model, summarizer = self.service(responses=[
@@ -123,7 +123,7 @@ class AssistantHistoryTests(unittest.TestCase):
         for outgoing in model.received_messages:
             assert_tool_pairs(self, outgoing)
             current_index = next(i for i, m in enumerate(outgoing) if isinstance(m, HumanMessage) and m.content == current)
-            self.assertEqual(outgoing[current_index:], state["messages"][len(original):len(original) + len(outgoing[current_index:])])
+            self.assertEqual(outgoing[current_index:-1], state["messages"][len(original):len(original) + len(outgoing[current_index:-1])])
         self.assertGreater(counter.messages(model.received_messages[-1]), service._history_budget.max_tokens)
         self.assertEqual(state["messages"][:len(original)], original)
         self.assertEqual(state["history_summary_calls"][0]["input_tokens"], 123)
@@ -289,7 +289,7 @@ class AssistantHistoryTests(unittest.TestCase):
                 self.assertEqual(state["history_summary_covered_until"], 4)
                 self.assertTrue(state["history_context_incomplete"])
                 self.assertEqual(state["history_summary_calls"][-1]["status"], "error")
-                outgoing = model.received_messages[-1][1:-1]
+                outgoing = model.received_messages[-1][1:-2]
                 self.assertLessEqual(HistoryTokenCounter(model).messages(outgoing), 1600)
                 assert_tool_pairs(self, model.received_messages[-1])
                 self.assertEqual(state["messages"][:len(original)], original)

@@ -19,7 +19,7 @@ from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.services.type_safe import TypeSafeService
 from langchain_app.tools.results import catalog_item_result, commit_sequence
-from test_assistant_agent import ToolCallingModel, assistant, tool_call
+from test_assistant_agent import last_message, ToolCallingModel, assistant, tool_call
 
 SEQUENCE_TOOLS = {
     "generate_sequence", "replace_sequence_element", "swap_sequence_elements", "add_sequence_elements",
@@ -79,7 +79,7 @@ class ResultReplyModel(ToolCallingModel):
     """Scripted final replies read operation facts, including legacy swap results."""
 
     def _generate(self, messages, **kwargs):
-        last = messages[-1]
+        last = last_message(messages)
         if isinstance(last, ToolMessage) and last.name in SEQUENCE_TOOLS:
             payload = json.loads(last.content)
             if payload["status"] != "ok":
@@ -88,7 +88,7 @@ class ResultReplyModel(ToolCallingModel):
                 change = payload["replacement"]
                 reply = f"Заменена {change['old_catalog_item']['name']} на {change['new_catalog_item']['name']}."
             elif "swap" in payload:
-                context = messages[0].content_blocks[-1]["text"]
+                context = messages[-1].content_blocks[-1]["text"]
                 selected = json.loads(next(line for line in context.splitlines()
                                           if line.startswith('{"selected_sequence":')))["selected_sequence"]
                 names = {e["element_id"]: e["catalog_item"]["name"] for e in selected["elements"]}

@@ -100,13 +100,13 @@ class BrowserModel(FakeMessagesListChatModel):
         return self
 
     def _generate(self, messages, **kwargs):
-        if isinstance(messages[-1], HumanMessage):
-            request = messages[-1].content
+        if isinstance(messages[-2], HumanMessage):
+            request = messages[-2].content
             self.requests.append(request)
             if request.startswith("Generate"):
                 name, args = "generate_sequence", {"request": request, "count": 5}
             elif request == "Добавь две асаны перед третьей":
-                context = messages[0].content_blocks[-1]["text"]
+                context = messages[-1].content_blocks[-1]["text"]
                 source = json.loads(next(line for line in context.splitlines()
                                          if line.startswith('{"selected_sequence":')))["selected_sequence"]
                 name, args = "add_sequence_elements", {
@@ -121,7 +121,7 @@ class BrowserModel(FakeMessagesListChatModel):
                 "name": name, "args": args, "id": str(uuid4()), "type": "tool_call",
             }])
         else:
-            payload = json.loads(messages[-1].content)
+            payload = json.loads(messages[-2].content)
             message = AIMessage(content=(
                 "Добавлены две асаны перед третьей, теперь в последовательности 7 элементов."
                 if "addition" in payload else "Generated 5 poses."

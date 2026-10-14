@@ -13,7 +13,7 @@ from langchain_app.schemas.response_progress import (
 )
 from langchain_app.services.catalog_item import CatalogItemApiError
 from langchain_app.ui.catalog_items import CatalogItemsRenderer
-from test_assistant_agent import ToolCallingModel, pose, tool_call, tool_model
+from test_assistant_agent import last_message, ToolCallingModel, pose, tool_call, tool_model
 from test_catalog_display_tool import display_call
 from test_sequence_replacement import catalog_pose, replacement_call
 from test_sequence_variants import APP
@@ -210,7 +210,7 @@ class CatalogDisplayUITests(unittest.TestCase):
             return render(renderer, rendered[-1], **kwargs)
 
         def check_live(messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage) and messages[-1].artifact:
+            if isinstance(last_message(messages), ToolMessage) and last_message(messages).artifact:
                 self.assertEqual(rendered, [[pose(1)]])
             return generate(messages, **kwargs)
 

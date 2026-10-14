@@ -3,6 +3,7 @@
 import unittest
 from unittest.mock import ANY, Mock, patch
 
+from test_assistant_agent import last_message
 from langchain_core.messages import AIMessage, ToolMessage
 from streamlit.testing.v1 import AppTest
 
@@ -15,7 +16,7 @@ from test_sequence_variants import APP, ToolCallingModel, selected_snapshot, too
 
 class ErrorAfterAdditionModel(ToolCallingModel):
     def _generate(self, messages, **kwargs):
-        if isinstance(messages[-1], ToolMessage) and messages[-1].name == "add_sequence_elements":
+        if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "add_sequence_elements":
             from langchain_app.services.assistant_agent import AssistantAgentError
             raise AssistantAgentError("Model unavailable")
         return super()._generate(messages, **kwargs)

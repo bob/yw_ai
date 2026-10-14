@@ -25,7 +25,7 @@ from langchain_app.services.request_errors import (
     public_request_error,
 )
 from langchain_app.services.response_execution import ResponseExecution
-from test_assistant_agent import ToolCallingModel, assistant, pose, tool_model
+from test_assistant_agent import last_message, ToolCallingModel, assistant, pose, tool_model
 from test_sequence_variants import APP
 
 
@@ -300,7 +300,7 @@ class ApiCreditErrorUITests(unittest.TestCase):
         original_generate = ToolCallingModel._generate
 
         def fail_final_reply(instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage):
+            if isinstance(last_message(messages), ToolMessage):
                 raise credit_error(OpenAIRateLimitError)
             return original_generate(instance, messages, **kwargs)
 

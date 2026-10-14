@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.schemas.response_progress import StepFinishedEvent, StepStartedEvent
 from langchain_app.services.response_progress import ProgressSignal
+from langchain_app.services.prompt_cache import PromptCacheSession, prefix_version, reported_usage
 from langchain_app.tools.context import AssistantToolContext
 
 PROJECTION_VERSION = 1
@@ -191,10 +192,13 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
     def __init__(
         self, model: BaseChatModel, budget: HistoryBudget,
         summarizer_factory: Callable[[], BaseChatModel],
+        *, prompt_cache: PromptCacheSession | None = None,
     ):
         self.counter = HistoryTokenCounter(model)
         self.budget = budget
         self.summarizer_factory = summarizer_factory
+        self.prompt_cache = prompt_cache
+        self.prefix_version = prefix_version(SUMMARY_PROMPT)
 
     def _suffix_start(
         self, messages: list[BaseMessage], boundaries: list[int],
@@ -259,12 +263,17 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
             name = getattr(summarizer, "model_name", "")
             if name.startswith("gpt-5"):
                 settings["reasoning_effort"] = "none"
-            response = summarizer.invoke(prompt, **settings)
-            usage = response.usage_metadata or {}
+            response = (
+                self.prompt_cache.call(
+                    summarizer, self.prefix_version, "history-summary", runtime.context.request_id,
+                    lambda cache_settings: summarizer.invoke(prompt, **settings, **cache_settings),
+                ) if self.prompt_cache else summarizer.invoke(prompt, **settings)
+            )
+            usage = reported_usage(response)
             accounting.update({
                 "input_tokens": usage.get("input_tokens"),
                 "output_tokens": usage.get("output_tokens"),
-                "cache_read_tokens": usage.get("input_token_details", {}).get("cache_read"),
+                "cache_read_tokens": usage.get("cached_input_tokens"),
             })
             if (not isinstance(response, AIMessage) or response.tool_calls or not response.text.strip()
                     or response.response_metadata.get("finish_reason") in {"length", "content_filter"}

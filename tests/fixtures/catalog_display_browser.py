@@ -28,8 +28,8 @@ class BrowserModel(FakeMessagesListChatModel):
         return self
 
     def _generate(self, messages, **kwargs):
-        if isinstance(messages[-1], HumanMessage):
-            request = str(messages[-1].content)
+        if isinstance(messages[-2], HumanMessage):
+            request = str(messages[-2].content)
             if request.startswith("Generate"):
                 name, args = "generate_sequence", {"request": request, "count": 3}
             else:
@@ -40,7 +40,7 @@ class BrowserModel(FakeMessagesListChatModel):
         else:
             last_call = next(message for message in reversed(messages) if isinstance(message, AIMessage)).tool_calls[0]
             if last_call["name"] == "search_catalog_items":
-                ids = [item["id"] for item in json.loads(messages[-1].content)["items"]]
+                ids = [item["id"] for item in json.loads(messages[-2].content)["items"]]
                 response = AIMessage(content="", tool_calls=[{
                     "name": "show_catalog_items", "args": {"catalog_item_ids": ids},
                     "id": str(uuid4()), "type": "tool_call",

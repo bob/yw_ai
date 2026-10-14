@@ -15,7 +15,7 @@ from streamlit.testing.v1 import AppTest
 
 from langchain_app.schemas import CatalogItemSchema
 from langchain_app.services.sequence_generator import SequenceGenerator
-from test_assistant_agent import tool_call
+from test_assistant_agent import last_message, tool_call
 from test_sequence_replacement import catalog_pose, replacement_call
 from test_sequence_swap import swap_call
 
@@ -31,8 +31,8 @@ class ToolCallingModel(FakeMessagesListChatModel):
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         self.received_messages.append(list(messages))
-        if isinstance(messages[-1], HumanMessage):
-            self.received_requests.append(messages[-1].content)
+        if isinstance(last_message(messages), HumanMessage):
+            self.received_requests.append(last_message(messages).content)
         result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
         for generation in result.generations:
             generation.message = generation.message.model_copy(deep=True)
@@ -46,7 +46,7 @@ class ErrorAfterGenerationModel(ToolCallingModel):
     fail_on_tool_result: bool = True
 
     def _generate(self, messages, **kwargs):
-        if self.fail_on_tool_result and isinstance(messages[-1], ToolMessage):
+        if self.fail_on_tool_result and isinstance(last_message(messages), ToolMessage):
             self.fail_on_tool_result = False
             raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
         return super()._generate(messages, **kwargs)
@@ -54,20 +54,20 @@ class ErrorAfterGenerationModel(ToolCallingModel):
 
 class ErrorAfterReplacementModel(ToolCallingModel):
     def _generate(self, messages, **kwargs):
-        if isinstance(messages[-1], ToolMessage) and messages[-1].name == "replace_sequence_element":
+        if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "replace_sequence_element":
             raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
         return super()._generate(messages, **kwargs)
 
 
 class ErrorAfterSwapModel(ToolCallingModel):
     def _generate(self, messages, **kwargs):
-        if isinstance(messages[-1], ToolMessage) and messages[-1].name == "swap_sequence_elements":
+        if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "swap_sequence_elements":
             raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
         return super()._generate(messages, **kwargs)
 
 
 def selected_snapshot(model, call_index=-1):
-    context = model.received_messages[call_index][0].content_blocks[-1]["text"]
+    context = model.received_messages[call_index][-1].content_blocks[-1]["text"]
     return json.loads(next(line for line in context.splitlines() if line.startswith('{"selected_sequence":')))["selected_sequence"]
 
 

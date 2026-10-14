@@ -13,7 +13,7 @@ from langchain_app.schemas import GeneratedSequence
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
 from langchain_app.services.sequence_editor import replace_element
-from test_assistant_agent import ToolCallingModel, assistant, pose, selected_snapshot, tool_call
+from test_assistant_agent import last_message, ToolCallingModel, assistant, pose, selected_snapshot, tool_call
 
 
 def catalog_pose(number, *, bilateral=False):
@@ -77,7 +77,7 @@ class SequenceReplacementTests(unittest.TestCase):
         self.assertTrue(variant.elements[2].end_mirror)
         self.assertEqual(service.state["sequences"][str(source.uuid)], before[str(source.uuid)])
         self.assertEqual(selected_snapshot(model)["uuid"], str(variant.uuid))
-        result = json.loads(model.received_messages[-1][-1].content)
+        result = json.loads(model.received_messages[-1][-2].content)
         self.assertEqual(result["replacement"]["old_catalog_item"]["id"], 3)
         self.assertEqual(result["replacement"]["new_catalog_item"]["id"], 9)
         self.assertEqual([item.uuid for item in service.get_sequence_variants(str(source.uuid))], [source.uuid, variant.uuid])
@@ -151,7 +151,7 @@ class SequenceReplacementTests(unittest.TestCase):
                     AIMessage(content="Cannot replace"),
                 ]
                 list(service.stream("Replace third"))
-                result = model.received_messages[-1][-1]
+                result = model.received_messages[-1][-2]
                 self.assertEqual(result.status, "error")
                 self.assertEqual(json.loads(result.content)["code"], code)
                 self.assertEqual(service.state["sequences"], before)
@@ -174,7 +174,7 @@ class SequenceReplacementTests(unittest.TestCase):
                     AIMessage(content="Already selected"),
                 ]
                 list(service.stream("Replace third"))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["status"], "no_change")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["status"], "no_change")
                 self.assertEqual(service.state["sequences"], before)
                 self.assertEqual(service.active_sequence_uuid, str(source.uuid))
                 self.assertFalse(service.state["turn_operation_committed"])
@@ -203,7 +203,7 @@ class SequenceReplacementTests(unittest.TestCase):
                     AIMessage(content="Search again"),
                 ]
                 list(service.stream("Replace third"))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "catalog_item_not_verified")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "catalog_item_not_verified")
                 self.assertEqual(len(service.state["sequences"]), 1)
                 self.assertEqual(len(service.state["latest_catalog_items"]), len(results))
 
@@ -224,7 +224,7 @@ class SequenceReplacementTests(unittest.TestCase):
                 ]
                 list(service.stream("Find another and replace"))
                 self.assertEqual(service.state["latest_catalog_items"], [])
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "catalog_item_not_verified")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "catalog_item_not_verified")
                 self.assertEqual(service.active_sequence_uuid, str(source.uuid))
                 self.assertEqual(len(service.state["sequences"]), 1)
 
@@ -241,7 +241,7 @@ class SequenceReplacementTests(unittest.TestCase):
                 ]
                 list(service.stream("Replace third"))
                 self.assertEqual(len(service.state["sequences"]), 2)
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
                 generator.generate.assert_called_once()
 
     def test_second_occurrence_is_blocked_until_next_user_request(self):
@@ -259,7 +259,7 @@ class SequenceReplacementTests(unittest.TestCase):
         self.assertEqual(first.uuid, first_uuid)
         self.assertEqual([item.catalog_item.id for item in first.elements], [1, 2, 9])
         self.assertEqual(len(service.state["sequences"]), 2)
-        self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+        self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
 
         model.responses = [replacement_call(first, 10, element_index=1), AIMessage(content="Second element replaced")]
         list(service.stream("Now replace the second pose with Pose 10"))
@@ -282,7 +282,7 @@ class SequenceReplacementTests(unittest.TestCase):
         model.responses = [replacement_call(source), AIMessage(content="Could not generate")]
         with self.assertRaises(AssistantAgentError):
             list(service.generate("Generate again"))
-        self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "generation_required")
+        self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "generation_required")
         self.assertEqual(service.state["sequences"], before)
         self.assertEqual(service.active_sequence_uuid, str(source.uuid))
 
@@ -299,7 +299,7 @@ class SequenceReplacementTests(unittest.TestCase):
                 batch = AIMessage(content="", tool_calls=[call.tool_calls[0] for call in calls])
                 model.responses = [batch, AIMessage(content="Will call sequentially")]
                 list(service.stream("Replace third"))
-                results = model.received_messages[-1][-2:]
+                results = model.received_messages[-1][-3:-1]
                 self.assertEqual([json.loads(message.content)["code"] for message in results], [
                     "sequential_tool_calls_required", "sequential_tool_calls_required",
                 ])
@@ -315,7 +315,7 @@ class SequenceReplacementTests(unittest.TestCase):
                 before = service.state["sequences"]
                 model.responses = [replacement_call(source, **arguments), AIMessage(content="Invalid request")]
                 list(service.stream("Replace third"))
-                self.assertEqual(model.received_messages[-1][-1].status, "error")
+                self.assertEqual(model.received_messages[-1][-2].status, "error")
                 self.assertEqual(service.state["sequences"], before)
                 self.assertEqual(service.active_sequence_uuid, str(source.uuid))
 
@@ -327,7 +327,7 @@ class SequenceReplacementTests(unittest.TestCase):
         original_generate = model.__class__._generate
 
         def fail_after_replace(model_instance, messages, **kwargs):
-            if isinstance(messages[-1], ToolMessage) and messages[-1].name == "replace_sequence_element":
+            if isinstance(last_message(messages), ToolMessage) and last_message(messages).name == "replace_sequence_element":
                 raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
             return original_generate(model_instance, messages, **kwargs)
 

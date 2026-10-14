@@ -361,8 +361,8 @@ class SequenceAdditionToolTests(unittest.TestCase):
         self.assertEqual(len(service.state["sequences"]), 2)
         self.assertTrue(service.state["turn_operation_committed"])
         self.assertEqual(selected_snapshot(model), variant.model_context())
-        message = model.received_messages[-1][-1]
-        self.assertEqual(message.tool_call_id, model.received_messages[-1][-2].tool_calls[0]["id"])
+        message = model.received_messages[-1][-2]
+        self.assertEqual(message.tool_call_id, model.received_messages[-1][-3].tool_calls[0]["id"])
         self.assertEqual(json.loads(message.content)["addition"]["position"], 3)
         factory.assert_called_once_with()
         generator.generate.assert_not_called()
@@ -390,7 +390,7 @@ class SequenceAdditionToolTests(unittest.TestCase):
         factory.reset_mock()
         model.responses = [addition_call(newer), AIMessage(content="Select the current variant")]
         list(service.stream("Add to selected"))
-        self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "stale_sequence")
+        self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "stale_sequence")
         factory.assert_not_called()
         self.assertEqual(service.active_sequence_uuid, str(sequence.uuid))
         model.responses = [addition_call(sequence), AIMessage(content="Added")]
@@ -418,7 +418,7 @@ class SequenceAdditionToolTests(unittest.TestCase):
                 }
                 model.responses = [addition_call(sequence), calls[name], AIMessage(content="One operation")]
                 list(service.stream("Add then change again"))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
                 self.assertEqual(len(service.state["sequences"]), 2)
                 factory.assert_called_once_with()
                 variant = service.get_sequence(service.active_sequence_uuid)
@@ -447,7 +447,7 @@ class SequenceAdditionToolTests(unittest.TestCase):
                     )]
                 model.responses = [*first_calls, addition_call(sequence), AIMessage(content="One operation")]
                 list(service.stream("Change then add"))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
                 generator.add_elements.assert_not_called()
                 self.assertEqual(len(service.state["sequences"]), 2)
 

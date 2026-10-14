@@ -14,7 +14,7 @@ from fixtures.compact_tool_results import measure, pose, run_case, source_sequen
 from langchain_app.schemas.catalog import CatalogItemSearchResult
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.response_progress_middleware import _tool_result
-from test_assistant_agent import ToolCallingModel, assistant, selected_snapshot, tool_call
+from test_assistant_agent import last_message, ToolCallingModel, assistant, selected_snapshot, tool_call
 
 CASES = [("generate", count) for count in (9, 36, 45)] + [
     ("regenerate", 9), ("replace", 9), ("swap", 9), ("add", 9),
@@ -49,7 +49,7 @@ class CompactToolResultTests(unittest.TestCase):
                 self.assertNotIn("image_url", message.content)
                 self.assertNotIn("rigman", message.content)
                 self.assertIsNone(message.artifact)
-        self.assertEqual(case.message.tool_call_id, case.model.received_messages[-1][-2].tool_calls[0]["id"])
+        self.assertEqual(case.message.tool_call_id, case.model.received_messages[-1][-3].tool_calls[0]["id"])
         self.assertEqual(selected_snapshot(case.model), case.sequence.model_context())
         self.assertTrue(case.service.state["turn_operation_committed"])
         self.assertEqual(case.service.state["sequences"][str(case.sequence.uuid)], case.sequence.model_dump(mode="json"))
@@ -161,7 +161,7 @@ class CompactToolResultTests(unittest.TestCase):
         self.assertEqual(variant.parent_uuid, source.uuid)
         self.assertEqual((variant.elements[2].start_mirror, variant.elements[2].end_mirror), (False, True))
         self.assertEqual((variant.elements[4].start_mirror, variant.elements[4].end_mirror), (True, False))
-        payload = json.loads(case.model.received_messages[-1][-1].content)
+        payload = json.loads(case.model.received_messages[-1][-2].content)
         self.assertNotIn("elements", payload)
         self.assertEqual([entry["name"] for entry in payload["swap"]], ["Seated pose 5"] * 2)
         self.assertEqual(len({entry["element_id"] for entry in payload["swap"]}), 2)
@@ -221,7 +221,7 @@ class CompactToolResultTests(unittest.TestCase):
                 original_generate = model._generate
 
                 def fail_final_reply(messages, **kwargs):
-                    if isinstance(messages[-1], ToolMessage):
+                    if isinstance(last_message(messages), ToolMessage):
                         raise APIConnectionError(request=httpx.Request("POST", "https://example.com"))
                     return original_generate(messages, **kwargs)
 

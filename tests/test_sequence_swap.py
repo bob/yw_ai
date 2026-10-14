@@ -369,8 +369,8 @@ class SequenceSwapToolTests(unittest.TestCase):
         self.assertEqual(len(service.state["sequences"]), 2)
         self.assertEqual(service.state["sequences"][str(source.uuid)], before[str(source.uuid)])
         self.assertEqual(selected_snapshot(model), variant.model_context())
-        message = model.received_messages[-1][-1]
-        self.assertEqual(message.tool_call_id, model.received_messages[-1][-2].tool_calls[0]["id"])
+        message = model.received_messages[-1][-2]
+        self.assertEqual(message.tool_call_id, model.received_messages[-1][-3].tool_calls[0]["id"])
         payload = json.loads(message.content)
         self.assertEqual({k: v for k, v in payload.items() if k not in ("status", "swap")}, {
             "uuid": str(variant.uuid), "operation": "swap", "elements_count": variant.elements_count,
@@ -387,7 +387,7 @@ class SequenceSwapToolTests(unittest.TestCase):
         service.select_sequence(str(source.uuid))
         model.responses = [swap_call(newer), AIMessage(content="Use the selected variant")]
         list(service.stream("Swap third and fifth"))
-        self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "stale_sequence")
+        self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "stale_sequence")
         self.assertEqual(service.active_sequence_uuid, str(source.uuid))
         self.assertEqual(len(service.state["sequences"]), 2)
         model.responses = [swap_call(source), AIMessage(content="Done")]
@@ -417,9 +417,9 @@ class SequenceSwapToolTests(unittest.TestCase):
                 with patch("langchain_app.services.sequence_editor.uuid4") as new_uuid:
                     list(service.stream("Swap third and fifth"))
                 new_uuid.assert_not_called()
-                result = model.received_messages[-1][-1]
+                result = model.received_messages[-1][-2]
                 self.assertEqual(result.status, "error")
-                self.assertEqual(result.tool_call_id, model.received_messages[-1][-2].tool_calls[0]["id"])
+                self.assertEqual(result.tool_call_id, model.received_messages[-1][-3].tool_calls[0]["id"])
                 if code is not None:
                     self.assertEqual(json.loads(result.content)["code"], code)
                 self.assertEqual(service.state["sequences"], before)
@@ -433,9 +433,9 @@ class SequenceSwapToolTests(unittest.TestCase):
         with patch("langchain_app.services.sequence_editor.uuid4") as new_uuid:
             list(service.stream("Swap the third occurrence with itself"))
         new_uuid.assert_not_called()
-        result = model.received_messages[-1][-1]
+        result = model.received_messages[-1][-2]
         self.assertEqual(json.loads(result.content), {"status": "no_change", "uuid": str(source.uuid)})
-        self.assertEqual(result.tool_call_id, model.received_messages[-1][-2].tool_calls[0]["id"])
+        self.assertEqual(result.tool_call_id, model.received_messages[-1][-3].tool_calls[0]["id"])
         self.assertEqual(service.state["sequences"], before)
         self.assertEqual(service.active_sequence_uuid, str(source.uuid))
         self.assertFalse(service.state["turn_operation_committed"])
@@ -468,7 +468,7 @@ class SequenceSwapToolTests(unittest.TestCase):
                     list(service.stream("Swap third and fifth"))
                 self.assertEqual(service.active_sequence_uuid, str(variant_uuid))
                 self.assertEqual(len(service.state["sequences"]), 2)
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
                 variant = service.get_sequence(service.active_sequence_uuid)
                 model.responses = [swap_call(variant), AIMessage(content="Swapped again")]
                 list(service.stream("Now swap third and fifth again"))
@@ -494,9 +494,9 @@ class SequenceSwapToolTests(unittest.TestCase):
                         list(service.stream("Change the sequence"))
                 else:
                     list(service.stream("Change the sequence"))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "operation_already_started")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "operation_already_started")
                 self.assertEqual(len(service.state["sequences"]), 2)
-                committed = json.loads(model.received_messages[-1][-3].content)
+                committed = json.loads(model.received_messages[-1][-4].content)
                 self.assertEqual(service.active_sequence_uuid, committed["uuid"])
                 self.assertEqual(service.get_sequence(service.active_sequence_uuid).operation, operation)
 
@@ -508,7 +508,7 @@ class SequenceSwapToolTests(unittest.TestCase):
                 model.responses = [swap_call(source), AIMessage(content="Generation required")]
                 with self.assertRaises(AssistantAgentError):
                     list(service.generate("Generate again", sequence_uuid=str(source.uuid) if regenerate else None))
-                self.assertEqual(json.loads(model.received_messages[-1][-1].content)["code"], "generation_required")
+                self.assertEqual(json.loads(model.received_messages[-1][-2].content)["code"], "generation_required")
                 self.assertEqual(service.state["sequences"], before)
                 self.assertEqual(service.active_sequence_uuid, str(source.uuid))
                 factory.assert_called_once()
