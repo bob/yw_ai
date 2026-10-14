@@ -151,8 +151,13 @@ def run_case(model, case):
                 problems.append("Expected one selection call")
         if catalog.mock_calls or tags.mock_calls:
             problems.append("Unexpected external catalog lookup")
-    if not replies or not "".join(replies).strip():
-        problems.append("Expected final text")
+    needs_text = (not commits and mode != "browse") or any(
+        payload.get("addition", {}).get("limit_applied") for payload in results
+    )
+    if needs_text and not "".join(replies).strip():
+        problems.append("Expected an explanation or clarification")
+    elif not needs_text and "".join(replies).strip():
+        problems.append("Expected no completion text for the displayed result")
     if forbidden.mock_calls:
         problems.append("Unexpected generation")
     for item in sources:

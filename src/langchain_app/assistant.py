@@ -108,7 +108,7 @@ if pending is not None:
             execution = response.get("execution")
             if execution is not None:
                 retain_execution(message, execution)
-            if response["content"]:
+            if response["content"] or response.get("sequence") is not None:
                 message["content"] = response["content"]
             if (sequence := response.get("sequence")) is not None:
                 message["sequence"] = sequence

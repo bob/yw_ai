@@ -172,11 +172,11 @@ class SequenceRenderer:
                     render_execution(snapshot)
                 if snapshot := message.get("execution"):
                     render_execution(snapshot)
-                if message["content"]:
-                    st.markdown(message["content"])
                 if items := message.get("catalog_items"):
                     self._catalog_items.render(items, key=f"assistant-catalog-{message_index}")
                 self._render_message_sequence(messages, message_index, disabled=disabled)
+                if message["content"]:
+                    st.markdown(message["content"])
 
     def _render_message_sequence(
         self, messages: list[ChatMessage], message_index: int, *, disabled: bool = False,
@@ -285,9 +285,10 @@ class SequenceRenderer:
         snapshots = []
         with st.chat_message("assistant"):
             progress = ResponseProgressRenderer(pending.request_id, pending.accepted_at, pending.sequence_uuid)
-            text_output = st.empty()
             catalog_output = st.empty()
             sequence_output = st.empty()
+            # Reserve text below both galleries so late replies cannot move thumbnails.
+            text_output = st.empty()
             if content:
                 text_output.markdown(content)
             provisional = create_sequence_view(self._language)

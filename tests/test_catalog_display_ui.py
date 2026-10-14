@@ -72,7 +72,7 @@ class CatalogDisplayUITests(unittest.TestCase):
                 self.assertEqual([caption.value for caption in app.caption], [])
                 self.assertFalse(app.get("status")[-1].get("html"))
                 public = app.chat_message[-1]
-                self.assertEqual([node.type for node in public.children.values()], ["status", "markdown", "flex_container"])
+                self.assertEqual([node.type for node in public.children.values()], ["status", "flex_container", "markdown"])
                 self.assertEqual(model.received_requests, [request])
                 # Instructions reach the model; routing itself is scripted offline.
                 system = str(model.received_messages[0][0].content)

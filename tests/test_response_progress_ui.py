@@ -14,13 +14,29 @@ from langchain_app.schemas.response_progress import (
     SequenceCommittedEvent, StepStartedEvent,
 )
 from langchain_app.services.response_execution import ResponseExecution
+from langchain_app.services.assistant_agent import AssistantAgent
 from langchain_app.services.catalog_item import CatalogItemApiError
 from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.ui.response_progress import ResponseProgressRenderer
 from test_assistant_agent import tool_call
+from test_catalog_display_tool import display_call
 from test_sequence_variants import (
     APP, ErrorAfterGenerationModel, ToolCallingModel, catalog_pose, pose, tool_model,
 )
+
+
+def response_layout_app():
+    """Keep the live response visible before testing its history projection."""
+    import streamlit as st
+    from langchain_app.ui.sequence import SequenceRenderer
+
+    renderer = SequenceRenderer(generator_factory=lambda: st.session_state.assistant)
+    if "message" not in st.session_state:
+        st.session_state.message = renderer.render_response(
+            "Show the requested poses", content="", key="live",
+        )
+    else:
+        renderer.render_messages([st.session_state.message])
 
 
 class ResponseProgressUITests(unittest.TestCase):
@@ -56,6 +72,66 @@ class ResponseProgressUITests(unittest.TestCase):
             app.run()
             self.assertEqual(self.assert_terminal(app), snapshot)
             self.assertEqual(len(model.received_messages), calls)
+
+    def test_useful_text_stays_below_thumbnails_live_and_in_history(self):
+        explanation = "Only 45 poses fit within the sequence limit."
+        for output in ("sequence", "catalog", "both"):
+            with self.subTest(output=output):
+                generator, catalog = Mock(), Mock()
+                generator.generate.return_value = [pose(1)]
+                catalog.search.return_value = [pose(2)]
+                calls = []
+                if output in ("sequence", "both"):
+                    calls.append(tool_call("generate_sequence", request="Practice", count=1))
+                if output in ("catalog", "both"):
+                    calls.extend([tool_call("search_catalog_items"), display_call(2)])
+                model = ToolCallingModel(responses=[*calls, AIMessage(content=explanation)])
+                service = AssistantAgent(
+                    lambda: generator, model=model,
+                    catalog_item_service=catalog, catalog_tag_service=Mock(),
+                )
+                app = AppTest.from_function(response_layout_app)
+                app.session_state.assistant = service
+                for phase in ("live", "history"):
+                    with self.subTest(phase=phase):
+                        app.run()
+                        self.assertFalse(app.exception)
+                        nodes = list(app.chat_message[-1])
+                        text_position = next(
+                            index for index, node in enumerate(nodes)
+                            if node.type == "markdown" and node.value == explanation
+                        )
+                        thumbnails = [
+                            index for index, node in enumerate(nodes)
+                            if node.type == "html" and 'class="mirror-thumbnail"' in node.proto.body
+                        ]
+                        self.assertEqual(len(thumbnails), 2 if output == "both" else 1)
+                        self.assertTrue(all(index < text_position for index in thumbnails))
+                        self.assertEqual(app.session_state.message["content"], explanation)
+                self.assertEqual(len(model.received_messages), len(calls) + 1)
+
+    def test_regeneration_without_text_clears_previous_reply(self):
+        previous_reply = "Only 45 poses fit within the sequence limit."
+        model = tool_model()
+        model.responses[-1] = AIMessage(content=previous_reply)
+        generator = Mock()
+        generator.generate.side_effect = [[pose(1)], [pose(2)]]
+        with patch("langchain_app.services.assistant_agent.init_chat_model", return_value=model), patch(
+            "langchain_app.dependencies.get_sequence_generator", return_value=generator,
+        ):
+            app = AppTest.from_file(str(APP)).run()
+            app.button(key="generate-sequence").click().run()
+            self.assert_terminal(app)
+            self.assertEqual(app.session_state.messages[-1]["content"], previous_reply)
+            model.responses[-1] = AIMessage(content="")
+            app.button(key="assistant-sequence-1-regenerate").click().run()
+            self.assert_terminal(app)
+            self.assertEqual(app.session_state.messages[-1]["content"], "")
+            self.assertEqual(app.session_state.messages[-1]["sequence"]["thumbnails"][0]["alt"], "Pose 2")
+            self.assertNotIn(previous_reply, [node.value for node in app.markdown])
+            app.run()
+            self.assertEqual(app.session_state.messages[-1]["content"], "")
+            self.assertEqual(generator.generate.call_count, 2)
 
     def test_tags_and_repeated_search_keep_public_messages_and_actual_order(self):
         first = tool_call("get_catalog_tag_names")

@@ -118,8 +118,11 @@ def run_case(model, case):
                 problems.append("Wrong swapped order")
             elif variant.parent_uuid != source.uuid or variant.family_uuid != source.family_uuid:
                 problems.append("Wrong selected parent or family")
-    if not reply.strip():
-        problems.append("Expected a final reply")
+    if commits:
+        if reply.strip():
+            problems.append("Expected no completion text for the displayed swap")
+    elif not reply.strip():
+        problems.append("Expected an explanation or clarification")
     if forbidden.mock_calls or catalog.mock_calls or tags.mock_calls:
         problems.append("Unexpected catalog, tag or generator call")
     for item in sources:

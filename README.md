@@ -26,8 +26,8 @@ See [feature 004: starting sequence element](docs/specs/004-starting-sequence-el
 
 Ask to browse catalog poses, ask which poses are available, or find replacement
 candidates without changing a sequence. After searching, the assistant selects
-verified IDs with `show_catalog_items`; the selection appears as thumbnails after
-the reply, outside the progress panel. Its `catalog_items_displayed` event can
+verified IDs with `show_catalog_items`; the selection appears as thumbnails above
+any reply, outside the progress panel. Its `catalog_items_displayed` event can
 arrive before the final text. Searching alone does not show a gallery.
 Generation, Regenerate, replacement, swapping, addition, and technique answers keep their existing
 output unless catalog browsing is separately requested. Generate and Regenerate
@@ -38,6 +38,14 @@ Each message stores a detached `catalog_items` snapshot for session reruns,
 including when the model's final text fails. New searches and later selections
 leave earlier messages unchanged.
 See [feature 003: catalog item display](docs/specs/003-catalog-items-display/README.md).
+
+Successful sequence operations and catalog displays need no text when the
+thumbnails fully answer the request. The assistant omits completion announcements,
+action recaps and generic offers of further help. Useful explanations, applied
+limits, errors and clarifying questions remain visible below the thumbnails,
+both during the response and in chat history, so arriving text does not move
+the gallery. A successful regeneration with no text clears the previous variant's
+reply.
 
 You can specify a duration in minutes instead of a pose count: an ordinary pose
 takes 40 seconds, while a mirrored (bilateral) pose takes 80 seconds for both
