@@ -19,19 +19,21 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fixtures.compact_tool_results import source_sequence
+from langchain_app.model_config import DEFAULT_OPENAI_MODEL, chat_model_options
 from langchain_app.services.assistant_history import HistoryBudget, HistoryTokenCounter
 from langchain_app.tools import ASSISTANT_TOOLS
 from test_assistant_agent import ToolCallingModel, assistant
 from test_assistant_history import summary_reply
 
-COUNTER_MODEL = ChatOpenAI(model="gpt-5.5", api_key="offline-token-counter")
+COUNTER_MODEL = ChatOpenAI(model=DEFAULT_OPENAI_MODEL, api_key="offline-token-counter",
+                          **chat_model_options(DEFAULT_OPENAI_MODEL))
 COUNTER = HistoryTokenCounter(COUNTER_MODEL)
 
 
 class ScriptedGPT(ToolCallingModel):
     """Offline outputs with the real GPT tokenizer, never a provider request."""
 
-    model_name: str = "gpt-5.5"
+    model_name: str = DEFAULT_OPENAI_MODEL
 
     def get_num_tokens_from_messages(self, messages, **kwargs):
         return COUNTER.messages(messages)
@@ -116,7 +118,7 @@ def measure():
     fallback = HistoryTokenCounter(ToolCallingModel(responses=[AIMessage(content="")])).messages(service.state["messages"])
     return {
         "mode": "offline estimates, not billed provider usage",
-        "tokenizer": f"tiktoken {version('tiktoken')}; gpt-5.5/o200k_base",
+        "tokenizer": f"tiktoken {version('tiktoken')}; {COUNTER.description}",
         "scope": "All 50 normal requests (system, snapshot, messages, serialized tool schemas), "
                  "all normal outputs, all summarizer inputs and outputs. Provider framing is estimated.",
         "budgets": {"max_tokens": 8192, "target_tokens": 4096, "summary_max_tokens": 768},
@@ -154,8 +156,10 @@ def live_semantics(output=None, scenario=None):
     for name, preferences, request in scenarios:
         if scenario and name != scenario:
             continue
-        model = CapturingGPT(model="gpt-5.5", timeout=60, max_retries=0, reasoning_effort="none")
-        summarizer = CapturingGPT(model="gpt-5.5", timeout=60, max_retries=0)
+        model = CapturingGPT(model=DEFAULT_OPENAI_MODEL, timeout=60, max_retries=0,
+                             **chat_model_options(DEFAULT_OPENAI_MODEL))
+        summarizer = CapturingGPT(model=DEFAULT_OPENAI_MODEL, timeout=60, max_retries=0,
+                                  **chat_model_options(DEFAULT_OPENAI_MODEL))
         factory, catalog, tags = Mock(), Mock(), Mock()
         catalog.search.return_value, tags.get_names.return_value = [], []
         service = assistant(factory, catalog_item_service=catalog, catalog_tag_service=tags,
@@ -185,7 +189,7 @@ def live_semantics(output=None, scenario=None):
             "catalog_calls": 0, "generator_calls": 0, "jev_calls": 0,
             "selected_sequence_uuid": service.active_sequence_uuid,
         })
-        report = {"mode": "live GPT semantic check with offline services", "model": "gpt-5.5", "rows": rows}
+        report = {"mode": "live GPT semantic check with offline services", "model": DEFAULT_OPENAI_MODEL, "rows": rows}
         if output:
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         assert len(summarizer.received_messages) == 1

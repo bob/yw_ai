@@ -27,6 +27,15 @@ POSE_DURATION_SECONDS = 40
 SITTING_TAG_PREFIX = "Position/Sitting"
 
 
+def generation_count(*, count: int | None = None, duration_seconds: float | None = None) -> int:
+    """Resolve size from validated arguments; explicit count takes precedence."""
+    if count is not None:
+        return count
+    if duration_seconds is not None:
+        return max(1, floor(duration_seconds / POSE_DURATION_SECONDS + 0.5))
+    return 9
+
+
 def _duration_units(item: CatalogItemSchema) -> int:
     """A mirrored catalog pose is performed on both sides."""
     return 2 if item.bilateral else 1
@@ -238,7 +247,7 @@ class SequenceGenerator:
         if duration_seconds is not None:
             if not isfinite(duration_seconds) or duration_seconds <= 0:
                 raise ValueError("duration_seconds must be positive and finite")
-            duration_units = max(1, floor(duration_seconds / POSE_DURATION_SECONDS + 0.5))
+            duration_units = generation_count(duration_seconds=duration_seconds)
             count = min(duration_units, MAX_SEQUENCE_ELEMENTS)
         if count == 0:
             return

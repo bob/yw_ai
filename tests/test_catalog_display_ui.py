@@ -76,7 +76,7 @@ class CatalogDisplayUITests(unittest.TestCase):
                 self.assertEqual(model.received_requests, [request])
                 # Instructions reach the model; routing itself is scripted offline.
                 system = str(model.received_messages[0][0].content)
-                for instruction in ("show_catalog_items", "The word 'show'", "do not change anything yet"):
+                for instruction in ("show_catalog_items", "available-pose questions", "Candidate browsing authorizes"):
                     self.assertIn(instruction, system)
                 factory.generate.assert_not_called()
 

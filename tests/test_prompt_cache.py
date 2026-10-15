@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from fixtures.compact_tool_results import pose, source_sequence
+from langchain_app.model_config import DEFAULT_OPENAI_MODEL, chat_model_options
 from langchain_app.services.assistant_history import HistoryBudget
 from langchain_app.services.prompt_cache import (
     PromptCacheSession, PromptCacheSettings, aggregate_usage, prefix_version,
@@ -28,11 +29,14 @@ class OpenAIStub:
         self.requests = []
         self.replies = iter(replies)
         self.model = ChatOpenAI(
-            model="gpt-4.1", api_key="test", max_retries=0, disable_streaming=True,
+            model=DEFAULT_OPENAI_MODEL, api_key="test", max_retries=0, disable_streaming=True,
+            **chat_model_options(DEFAULT_OPENAI_MODEL),
             http_client=httpx.Client(transport=httpx.MockTransport(self.respond)),
         )
 
     def respond(self, request):
+        if request.url.path != "/v1/chat/completions":
+            raise AssertionError(f"Expected Chat Completions, received {request.url.path}")
         self.requests.append(json.loads(request.content))
         message = next(self.replies)
         content = {"role": "assistant", "content": message.text or None}
@@ -43,7 +47,7 @@ class OpenAIStub:
             } for call in message.tool_calls]
         return httpx.Response(200, json={
             "id": f"chatcmpl-{len(self.requests)}", "object": "chat.completion",
-            "created": 0, "model": "gpt-4.1-2025-04-14",
+            "created": 0, "model": DEFAULT_OPENAI_MODEL,
             "choices": [{"index": 0, "finish_reason": "tool_calls" if message.tool_calls else "stop", "message": content}],
             "usage": {"prompt_tokens": 2000, "completion_tokens": 100, "total_tokens": 2100,
                       "prompt_tokens_details": {"cached_tokens": 0 if len(self.requests) == 1 else 1024}},
@@ -92,11 +96,13 @@ class PromptCacheTests(unittest.TestCase):
             self.assertEqual(payload["messages"][0], stub.requests[0]["messages"][0])
             self.assertEqual(payload["tools"], stub.requests[0]["tools"])
             self.assertEqual(payload["prompt_cache_key"], stub.requests[0]["prompt_cache_key"])
-            self.assertEqual(payload["prompt_cache_retention"], "in_memory")
-            self.assertNotIn("prompt_cache_options", payload)
+            self.assertEqual(payload["model"], "gpt-6-luna")
+            self.assertEqual(payload["reasoning_effort"], "none")
+            self.assertEqual(payload["prompt_cache_options"], {"mode": "implicit", "ttl": "30m"})
+            self.assertNotIn("prompt_cache_retention", payload)
             self.assertEqual(payload["messages"][-1]["role"], "system")
             self.assertNotIn('{"selected_sequence":', str(payload["messages"][0]["content"]))
-            self.assertEqual(sum("Current selected sequence (" in str(m["content"]) for m in payload["messages"]), 1)
+            self.assertEqual(sum("Current selected sequence:" in str(m["content"]) for m in payload["messages"]), 1)
             pending = set()
             for message in payload["messages"]:
                 if message["role"] == "tool":
@@ -131,6 +137,11 @@ class PromptCacheTests(unittest.TestCase):
         self.assertNotEqual(normal.requests[0]["prompt_cache_key"], summary.requests[0]["prompt_cache_key"])
         self.assertEqual(normal.requests[0]["messages"][0], normal.requests[1]["messages"][0])
         self.assertNotIn("selected_sequence", summary.requests[0]["messages"][-1]["content"])
+        for payload in summary.requests:
+            self.assertEqual(payload["model"], "gpt-6-luna")
+            self.assertEqual(payload["reasoning_effort"], "none")
+            self.assertEqual(payload["prompt_cache_options"]["ttl"], "30m")
+            self.assertNotIn("prompt_cache_retention", payload)
         self.assertEqual(service.state["messages"][:len(original)], original)
         records = service.model_usage
         self.assertEqual([r["call_kind"] for r in records], ["history_summary", "assistant"] * 2)
@@ -163,6 +174,11 @@ class PromptCacheTests(unittest.TestCase):
             self.assertEqual(settings["prompt_cache_key"], "key")
         model = ChatOpenAI(model="gpt-4.1", api_key="test")
         self.assertEqual(PromptCacheSettings(retention="24h").model_settings(model, "key")["prompt_cache_retention"], "24h")
+        luna = ChatOpenAI(model="gpt-6-luna", api_key="test", reasoning_effort="none")
+        for settings in (PromptCacheSettings(), PromptCacheSettings(retention="30m")):
+            self.assertEqual(settings.model_settings(luna, "key"), {
+                "prompt_cache_key": "key", "prompt_cache_options": {"mode": "implicit", "ttl": "30m"},
+            })
         for settings in (PromptCacheSettings(False), PromptCacheSettings()):
             fake = ToolCallingModel(responses=[AIMessage(content="Готово")])
             self.assertEqual(settings.model_settings(fake, "key"), {})
@@ -176,13 +192,16 @@ class PromptCacheTests(unittest.TestCase):
         list(service.stream("Привет"))
         self.assertNotIn("prompt_cache_key", stub.requests[0])
         self.assertNotIn("prompt_cache_retention", stub.requests[0])
+        self.assertNotIn("prompt_cache_options", stub.requests[0])
         self.assertIsNone(snapshot(stub.requests[0]))
         self.assertEqual(len(service.model_usage), 1)
 
     def test_bad_config_fails_before_model_initialization_and_has_no_fallback_request(self):
         for settings, model in ((PromptCacheSettings(retention="24h"), "openai:gpt-4.1-mini"),
                                 (PromptCacheSettings(retention="in_memory"), "openai:gpt-5.5"),
-                                (PromptCacheSettings(retention="24h"), "openai:gpt-5.6-sol")):
+                                (PromptCacheSettings(retention="24h"), "openai:gpt-5.6-sol"),
+                                (PromptCacheSettings(retention="in_memory"), "openai:gpt-6-luna"),
+                                (PromptCacheSettings(retention="30m"), "openai:gpt-4.1")):
             with self.subTest(model=model), patch("langchain_app.services.assistant_agent.init_chat_model") as init:
                 with self.assertRaisesRegex(ValueError, "Unsupported"):
                     assistant(Mock(), model=model, prompt_cache_settings=settings)

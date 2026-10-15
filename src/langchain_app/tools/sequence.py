@@ -13,7 +13,7 @@ from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.services.catalog_errors import CatalogServiceError
 from langchain_app.services.sequence_editor import SequenceEditorError, insert_elements, replace_element, swap_elements
-from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS
+from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS, generation_count
 from langchain_app.services.type_safe import TypeSafeServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
 from langchain_app.tools.results import commit_sequence
@@ -22,47 +22,46 @@ from langchain_app.tools.results import commit_sequence
 @tool
 def generate_sequence(
     request: Annotated[str, Field(min_length=1)],
-    count: Annotated[int, Field(
-        gt=0, le=MAX_SEQUENCE_ELEMENTS, strict=True,
-        description="Pose count or duration-based upper estimate; mandatory maximum is 45 elements.",
-    )],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
+    count: Annotated[int | None, Field(
+        gt=0, strict=True,
+        description="Explicit requested pose count; null for duration-only requests or unspecified size.",
+    )] = None,
     starting_catalog_item_id: Annotated[int | None, Field(
         gt=0, strict=True,
         description="Verified catalog item ID requested as the first pose; null uses a random start.",
     )] = None,
     duration_seconds: Annotated[float | None, Field(
         gt=0, allow_inf_nan=False,
-        description="Requested practice duration in seconds; null when an explicit pose count is given.",
+        description="Requested duration in seconds; used only when count is null.",
     )] = None,
 ) -> Command | ToolMessage:
-    """Generate a yoga sequence using the user's full request and inferred pose count.
+    """Create a new sequence whenever generation is requested, including when
+    a sequence is already selected. "Создай секвенцию" requires this tool.
 
-    Preserve every preference and constraint in request. Use an explicit count
-    when present and leave duration_seconds null. Otherwise infer an upper count
-    from duration using 40 seconds per ordinary pose, round halves up, and pass
-    the requested duration_seconds. Mirrored (bilateral) poses take 80 seconds,
-    so the generator adjusts the actual element count during selection.
-    Mandatory rule: never generate more than 45 elements, including when the
-    user requests a higher count or a longer duration. Cap count at 45 and
-    explain the limit. A mirrored pose is one element but takes twice the time.
-    If the user specifies a first pose, resolve it using catalog search or the
-    selected sequence and pass starting_catalog_item_id. It takes priority over
-    the random start and does not require the Other/Starting tag. Leave it null
-    when no first pose is requested; random positions are lying 10%, sitting 60%,
-    standing 30%. After a lying start the second pose must be lying on the back;
-    after a standing start prefer standing and never choose a lying second pose.
+    Pass an explicit count unchanged; otherwise pass duration_seconds, or leave
+    both null for 9 poses. Code gives count priority, calculates duration using
+    40/80 seconds per ordinary/mirrored pose, and caps the result at 45 elements.
+    A request for 50 poses means count=50: run without asking to accept the cap.
+    For a requested first pose, resolve its ID by search or selected_sequence
+    and pass starting_catalog_item_id; Other/Starting is not required. Clarify
+    an ambiguous first pose; report an unavailable pose or missing thumbnail
+    without substituting a random start. Null uses the code's random start.
     """
     if not request.strip():
         return tool_error(runtime, "invalid_arguments", "request must not be blank")
     context = runtime.context
     if context.generation_started or runtime.state.get("turn_operation_committed", False):
         return tool_error(runtime, "operation_already_started", "Generate at most once per request")
+    requested_count = generation_count(count=count, duration_seconds=duration_seconds)
+    effective_count = min(requested_count, MAX_SEQUENCE_ELEMENTS)
+    if count is not None:
+        duration_seconds = None
     context.generation_started = True
     generator = context.generator_factory()
     items = []
     for item in generator.generate(
-        request, language="en", count=count, starting_catalog_item_id=starting_catalog_item_id,
+        request, language="en", count=effective_count, starting_catalog_item_id=starting_catalog_item_id,
         **({"duration_seconds": duration_seconds} if duration_seconds is not None else {}),
         progress_observer=runtime.stream_writer,
     ):
@@ -78,7 +77,16 @@ def generate_sequence(
     sequence = GeneratedSequence.from_catalog_items(
         items, request=context.user_request, parent=context.regeneration_parent,
     )
-    return commit_sequence(runtime, sequence)
+    generation = None
+    limit_applied = requested_count > MAX_SEQUENCE_ELEMENTS and (
+        duration_seconds is None
+        or sum(2 if item.bilateral else 1 for item in items) < requested_count
+    )
+    if limit_applied:
+        generation = {"limit_applied": True, "limit": MAX_SEQUENCE_ELEMENTS}
+        if count is not None:
+            generation["requested_count"] = count
+    return commit_sequence(runtime, sequence, generation=generation)
 
 
 @tool
@@ -92,18 +100,20 @@ def add_sequence_elements(
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
     insert_before_element_id: UUID | None = None,
 ) -> Command | ToolMessage:
-    """Select a block of new poses with TypeSafe and add it to the selected sequence.
+    """Add one TypeSafe-selected block to the selected sequence.
 
-    Call when the user asks to apply an addition. Preserve all preferences in
-    request; do not supply catalog IDs, ready-made poses, or mirror flags.
-    Count is the number of new elements, not the final sequence size. Use 1
-    when no count is specified. Pass the requested count even above 45; the
-    tool limits the block to the available space. Use UUIDs from the current
-    selected snapshot. A null anchor appends; an occurrence UUID inserts before
-    it. To insert after a pose, use the following occurrence, or null at the end.
-    Clarify ambiguous references before calling. The entire block consumes one
-    operation, shared with generation, replacement and swapping. Explain a
-    selection failure without automatically repeating the same failed call.
+    The sequence may grow beyond its original requested count; only the total
+    limit of 45 elements is binding.
+    Count NEW elements: default 1; "fill to T" means T-N, "fill to the limit"
+    means 45-N. If the target size is reached or lower, explain without calling.
+    Pass the full requested delta; code caps it to free space without confirmation,
+    including when only part of the requested block fits. Mirrored poses
+    count as one. For duration-only additions, clarify the number of elements:
+    "Добавь асаны ещё на пять минут" -> ask how many; do not call this tool.
+    Null insert_before_element_id appends; otherwise insert before that UUID.
+    To prepend use the first occurrence; to insert after P use the next UUID
+    or null after the last. TypeSafe chooses poses using fixed surroundings;
+    do not supply catalog IDs, prepared elements, or mirror flags.
     """
     context = runtime.context
     if context.require_generation:
@@ -177,12 +187,8 @@ def replace_sequence_element(
     replacement_catalog_item_id: Annotated[int, Field(gt=0, strict=True)],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
 ) -> Command | ToolMessage:
-    """Replace one occurrence in the selected sequence with a verified catalog candidate.
-
-    Use UUIDs from the current sequence snapshot and an item ID from catalog
-    search. Call only when the user asks to apply a replacement, not to find alternatives.
-    Replace at most one element per user request. This does not add, delete, move,
-    or independently change the mirroring of an element.
+    """Replace element_id in sequence_uuid using replacement_catalog_item_id
+    from the latest verified catalog search. Creates a new variant.
     """
     context = runtime.context
     if context.require_generation:
@@ -229,14 +235,13 @@ def swap_sequence_elements(
     second_element_id: UUID,
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
 ) -> Command | ToolMessage:
-    """Swap two existing occurrences in the selected sequence, creating a new variant.
+    """Apply an explicitly requested swap of one fully identified pair.
 
-    Resolve both occurrences using UUIDs from the current selected snapshot,
-    never catalog IDs or positions. Clarify ambiguous references before calling.
-    Call when the user asks to apply the swap. Swap one pair per user request;
-    this consumes the same operation limit as generation or replacement.
-    Whole occurrences move with their catalog items and mirror flags.
-    Catalog search and regeneration are not needed for this operation.
+    Do not call for hypothetical questions, ambiguous references, or requests
+    for multiple operations; clarify those first. Exchange first_element_id
+    and second_element_id in sequence_uuid,
+    creating a new variant. Intermediate positions stay fixed. Distinct
+    occurrences of the same catalog item can swap. No catalog search needed.
     """
     context = runtime.context
     if context.require_generation:

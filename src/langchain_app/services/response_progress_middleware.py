@@ -132,7 +132,7 @@ def _tool_response_progress(
     identity = {"step_id": step_id, "tool_call_id": request.tool_call["id"]}
     writer(ProgressSignal(StepStartedEvent, {**identity, "code": code, "title": title}))
     count = request.tool_call["args"].get("count") if name == "generate_sequence" else None
-    total = count if type(count) is int and count > 0 else None
+    total = min(count, MAX_SEQUENCE_ELEMENTS) if type(count) is int and count > 0 else None
     order = 0
     search_id = None
     search_started_at = 0.0

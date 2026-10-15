@@ -23,6 +23,7 @@ def commit_sequence(
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
     sequence: GeneratedSequence,
     *,
+    generation: dict | None = None,
     replacement: dict | None = None,
     swap: list[dict] | None = None,
     addition: dict | None = None,
@@ -33,7 +34,7 @@ def commit_sequence(
         "status": "ok", "uuid": sequence_uuid,
         "operation": sequence.operation, "elements_count": sequence.elements_count,
     }
-    for key, facts in (("replacement", replacement), ("swap", swap), ("addition", addition)):
+    for key, facts in (("generation", generation), ("replacement", replacement), ("swap", swap), ("addition", addition)):
         if facts is not None:
             result[key] = facts
     return Command(update={

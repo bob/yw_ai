@@ -2,14 +2,14 @@ import streamlit as st
 from openai import OpenAI
 import os
 
+from langchain_app.model_config import DEFAULT_OPENAI_MODEL
 st.title("ChatGPT-like clone")
 
 # Set OpenAI API key from Streamlit secrets
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Set a default model
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-5.5"
+# Keep the model current across reruns of an existing session.
+st.session_state["openai_model"] = DEFAULT_OPENAI_MODEL
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -32,6 +32,7 @@ if prompt := st.chat_input("What is up?"):
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
             model=st.session_state["openai_model"],
+            reasoning_effort="none",
             messages=[
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages

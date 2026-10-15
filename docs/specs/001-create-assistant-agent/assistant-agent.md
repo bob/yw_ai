@@ -175,7 +175,7 @@ tools. Tools не вызывают `st.*`.
 Переименовать `SequenceAgent`/`SequenceAgentError`, factory, импорты и тесты.
 Предлагаемая настройка модели — `ASSISTANT_AGENT_MODEL`; временный порядок:
 непустой `ASSISTANT_AGENT_MODEL` → непустой `SEQUENCE_AGENT_MODEL` → текущий
-default `openai:gpt-5.5`. Обновить README и `.env.example` при реализации.
+default `openai:gpt-6-luna`. Миграция описана в [014](../014-gpt-6-luna/README.md).
 Entrypoint переименован в `assistant.py`, поскольку приложение обслуживает
 не только генерацию секвенций. Команда запуска и путь в UI-тестах обновлены.
 

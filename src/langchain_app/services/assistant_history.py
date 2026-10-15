@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.runtime import Runtime
 from pydantic import BaseModel, ConfigDict
 
+from langchain_app.model_config import DEFAULT_OPENAI_MODEL
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.schemas.response_progress import StepFinishedEvent, StepStartedEvent
 from langchain_app.services.response_progress import ProgressSignal
@@ -261,7 +262,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
             summarizer = self.summarizer_factory()
             settings = {"max_tokens": self.budget.summary_max_tokens}
             name = getattr(summarizer, "model_name", "")
-            if name.startswith("gpt-5"):
+            if name.startswith("gpt-5") or name == DEFAULT_OPENAI_MODEL:
                 settings["reasoning_effort"] = "none"
             response = (
                 self.prompt_cache.call(

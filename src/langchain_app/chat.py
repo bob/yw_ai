@@ -7,6 +7,7 @@ from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import InMemorySaver
 
+from langchain_app.model_config import DEFAULT_CHAT_MODEL, chat_model_options
 load_dotenv()
 
 SYSTEM_PROMPT = """Ты веселый шутник, массовик-затейник. Что ни слово, то искрометный юмор.
@@ -20,7 +21,8 @@ if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid4())
 
 model = init_chat_model(
-    "openai:gpt-5.5",
+    DEFAULT_CHAT_MODEL,
+    **chat_model_options(DEFAULT_CHAT_MODEL),
     temperature=0.5,
     timeout=300,
     max_tokens=25000,

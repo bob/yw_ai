@@ -52,6 +52,8 @@ def openai_model_name(model: str | BaseChatModel) -> str | None:
 def retention_values(name: str) -> tuple[str, ...]:
     """Conservative legacy compatibility; do not apply legacy defaults to new APIs."""
     name = re.sub(r"-\d{4}-\d{2}-\d{2}$", "", name)
+    if name == "gpt-6-luna":
+        return ("30m",)
     if name in {"gpt-5.5", "gpt-5.5-pro"}:
         return ("24h",)
     if name in {
@@ -74,8 +76,8 @@ class PromptCacheSettings:
     def __post_init__(self):
         if type(self.enabled) is not bool:
             raise ValueError("ASSISTANT_PROMPT_CACHE_ENABLED must be true or false")
-        if self.retention not in {None, "in_memory", "24h"}:
-            raise ValueError("ASSISTANT_PROMPT_CACHE_RETENTION must be in_memory or 24h")
+        if self.retention not in {None, "in_memory", "24h", "30m"}:
+            raise ValueError("ASSISTANT_PROMPT_CACHE_RETENTION must be in_memory, 24h or 30m")
 
     @classmethod
     def from_environment(cls):
@@ -98,7 +100,10 @@ class PromptCacheSettings:
         supported = retention_values(name)
         retention = self.retention or (supported[0] if supported else None)
         if retention:
-            result["prompt_cache_retention"] = retention
+            if retention == "30m":
+                result["prompt_cache_options"] = {"mode": "implicit", "ttl": "30m"}
+            else:
+                result["prompt_cache_retention"] = retention
         return result
 
 

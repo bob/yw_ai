@@ -56,10 +56,13 @@ ordinary poses, fewer with mirrored poses. The time budget rounds to the nearest
 exceed the rounded budget by 40 seconds. An explicit pose count takes precedence
 over duration. **Every generated sequence is limited to 45 elements**, even for
 requests with a higher count or longer duration. If neither is specified, the
-agent uses 9 poses. See [feature 005: sequence duration and limit](docs/specs/005-sequence-duration-and-limit/README.md).
+agent uses 9 poses. Size calculation, explicit-count priority, and capping run in
+Python; the model supplies the requested count or duration. See
+[feature 005: sequence duration and limit](docs/specs/005-sequence-duration-and-limit/README.md)
+and [feature 013: compact system instructions](docs/specs/013-compact-system-instructions/README.md).
 **Regenerate** resends the original prompt. Set `ASSISTANT_AGENT_MODEL`
 to change the model. A nonempty `SEQUENCE_AGENT_MODEL` remains a fallback for
-existing `.env` files; the default is `openai:gpt-4.1`.
+existing `.env` files; the default is `openai:gpt-6-luna`.
 The agent requires `OPENAI_API_KEY` in addition to the existing
 catalog and TypeSafe settings.
 
@@ -135,13 +138,17 @@ is never appended to the stored transcript. OpenAI calls use a stable per-sessio
 `prompt_cache_key`, with separate keys for assistant and history-summary calls.
 `ASSISTANT_PROMPT_CACHE_ENABLED` defaults to `true`; setting it to `false` stops
 sending cache settings (OpenAI's automatic caching can still apply).
-For `gpt-4.1`, retention defaults to `in_memory`; set
-`ASSISTANT_PROMPT_CACHE_RETENTION=24h` to request extended retention. Explicit
+For `gpt-6-luna`, requests use Chat Completions with `reasoning_effort="none"`
+and `prompt_cache_options={"mode":"implicit","ttl":"30m"}`. The optional
+`ASSISTANT_PROMPT_CACHE_RETENTION=30m` matches this default. Explicit
 unsupported settings fail at initialization. Internal `AssistantAgent.model_usage`
 records reported input, cached input, output, and reasoning tokens per request,
 including summarization; missing usage remains unknown. Cache hits and savings
 depend on the provider. The canceled feature 011's routing and local completion
 are not used. See [feature 012: GPT prompt caching](docs/specs/012-gpt-prompt-caching/README.md).
+The app, summary model, training examples, and fixture defaults share
+[the Luna configuration](src/langchain_app/model_config.py); see
+[014: GPT-6 Luna migration](docs/specs/014-gpt-6-luna/README.md).
 
 Chat, **Generate**, and **Regenerate** show a live execution block immediately.
 It follows real model and catalog work, streams provisional poses, and collapses

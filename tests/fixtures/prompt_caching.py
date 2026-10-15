@@ -17,6 +17,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fixtures.compact_tool_results import pose, source_sequence
+from langchain_app.model_config import DEFAULT_OPENAI_MODEL, chat_model_options
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.services.assistant_history import HistoryBudget
 from langchain_app.services.prompt_cache import PromptCacheSettings, aggregate_usage, usage_cost
@@ -45,7 +46,7 @@ def run_comparison(output, *, model_name, rates, pricing_source):
         "conditions": "No prewarm, padding, extra cache-hit attempts or provider retries. "
                       "First and later calls are shown separately, without assuming they are cold/warm. "
                       "Baseline keeps automatic provider caching but sends no cache key/retention. "
-                      "012 uses per-session keys and in_memory. No profiles or routing from canceled 011.",
+                      "012 uses per-session keys and model-compatible cache settings. No profiles or routing from canceled 011.",
         "rows": [],
     }
 
@@ -60,8 +61,9 @@ def run_comparison(output, *, model_name, rates, pricing_source):
             catalog.search.return_value = [pose(20), pose(21)]
             tags.get_names.return_value = ["Position/Sitting", "Bend/Forward"]
             model = ChatOpenAI(model=model_name, timeout=60, max_retries=0, disable_streaming=True,
-                               model_kwargs={"parallel_tool_calls": False})
-            summarizer = ChatOpenAI(model=model_name, timeout=60, max_retries=0, disable_streaming=True)
+                               model_kwargs={"parallel_tool_calls": False}, **chat_model_options(model_name))
+            summarizer = ChatOpenAI(model=model_name, timeout=60, max_retries=0, disable_streaming=True,
+                                    **chat_model_options(model_name))
             service = assistant(lambda: generator, catalog_item_service=catalog, catalog_tag_service=tags,
                                 model=model, summary_model=summarizer,
                                 history_budget=HistoryBudget(1600, 1000, 256) if scenario == "repeated_summary" else None,
@@ -143,7 +145,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--model", default="gpt-4.1")
+    parser.add_argument("--model", default=DEFAULT_OPENAI_MODEL)
     parser.add_argument("--input-rate", type=float, required=True)
     parser.add_argument("--cached-input-rate", type=float, required=True)
     parser.add_argument("--output-rate", type=float, required=True)

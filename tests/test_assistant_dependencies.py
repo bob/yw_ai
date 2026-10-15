@@ -11,7 +11,7 @@ class AssistantDependenciesTests(unittest.TestCase):
         for settings, expected in (
             ({"ASSISTANT_AGENT_MODEL": " openai:new ", "SEQUENCE_AGENT_MODEL": "openai:old"}, "openai:new"),
             ({"ASSISTANT_AGENT_MODEL": " ", "SEQUENCE_AGENT_MODEL": " openai:old "}, "openai:old"),
-            ({"ASSISTANT_AGENT_MODEL": "", "SEQUENCE_AGENT_MODEL": ""}, "openai:gpt-4.1"),
+            ({"ASSISTANT_AGENT_MODEL": "", "SEQUENCE_AGENT_MODEL": ""}, "openai:gpt-6-luna"),
         ):
             with self.subTest(settings=settings), patch.dict("os.environ", settings), patch(
                 "langchain_app.dependencies.get_sequence_generator", return_value=Mock()

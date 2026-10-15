@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage, ToolMessage
 
+from langchain_app.model_config import DEFAULT_CHAT_MODEL
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.services.assistant_agent import AssistantAgent
 
@@ -137,7 +138,7 @@ def run_case(model, case):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=(os.getenv("ASSISTANT_AGENT_MODEL", "").strip()
-                        or os.getenv("SEQUENCE_AGENT_MODEL", "").strip() or "openai:gpt-5.5"))
+                        or os.getenv("SEQUENCE_AGENT_MODEL", "").strip() or DEFAULT_CHAT_MODEL))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--case", action="append", help="Run only a named case; may be repeated")
     args = parser.parse_args()

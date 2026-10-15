@@ -4,6 +4,7 @@ import os
 
 import streamlit as st
 
+from langchain_app.model_config import DEFAULT_CHAT_MODEL
 from langchain_app.services import (
     AssistantAgent,
     CatalogItemService,
@@ -63,6 +64,6 @@ def get_assistant_agent(
         model=(
             os.getenv("ASSISTANT_AGENT_MODEL", "").strip()
             or os.getenv("SEQUENCE_AGENT_MODEL", "").strip()
-            or "openai:gpt-4.1"
+            or DEFAULT_CHAT_MODEL
         ),
     )

@@ -8,6 +8,7 @@ from langchain.agents import create_agent
 
 from langgraph.checkpoint.memory import InMemorySaver
 
+from langchain_app.model_config import DEFAULT_CHAT_MODEL, chat_model_options
 checkpointer = InMemorySaver()
 
 @tool
@@ -34,7 +35,8 @@ SYSTEM_PROMPT = """You are a literary data assistant.
 Do not guess line counts or positions—ground them in tool results from the saved file."""
 
 model = init_chat_model(
-    "openai:gpt-5.5",
+    DEFAULT_CHAT_MODEL,
+    **chat_model_options(DEFAULT_CHAT_MODEL),
     temperature=0.5,
     timeout=300,
     max_tokens=25000,

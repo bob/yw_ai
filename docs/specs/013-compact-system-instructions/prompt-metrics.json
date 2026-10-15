@@ -1,0 +1,43 @@
+{
+  "measured_at_utc": "2026-10-14T20:21:02.285199+00:00",
+  "baseline_git_commit": "a9337fdfaa3b4563a33404e97b3e156bd5f5f000",
+  "tokenizer": "tiktoken.encoding_for_model(gpt-4.1)",
+  "tool_serialization": "convert_to_openai_tool then compact JSON, ensure_ascii=False",
+  "scope": "Static system prompt, context instructions, and tool schemas. Excludes history, selected snapshot, request-status flags, and provider framing. Not reported API usage or a cost estimate.",
+  "before": {
+    "system_prompt": {
+      "words": 1800,
+      "characters": 11778,
+      "tokens": 2278
+    },
+    "context_instructions": {
+      "words": 49,
+      "characters": 361,
+      "tokens": 60
+    },
+    "tools_json": {
+      "words": 648,
+      "characters": 7165,
+      "tokens": 1507
+    }
+  },
+  "after": {
+    "system_prompt": {
+      "words": 776,
+      "characters": 5395,
+      "tokens": 1062
+    },
+    "context_instructions": {
+      "words": 11,
+      "characters": 87,
+      "tokens": 13
+    },
+    "tools_json": {
+      "words": 416,
+      "characters": 5707,
+      "tokens": 1233
+    }
+  },
+  "static_tokens_before": 3845,
+  "static_tokens_after": 2308
+}

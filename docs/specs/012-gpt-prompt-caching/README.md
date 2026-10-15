@@ -59,10 +59,11 @@ requests, все occurrences, IDs/names/tags/bilateral и mirror flags; image UR
 
 ## 3. Ключ и параметры OpenAI
 
-Текущая конфигурация `.env` и default задают `gpt-4.1`; код допускает другую модель.
+Текущая конфигурация `.env` и default задают `gpt-6-luna`; см. [миграцию 014](../014-gpt-6-luna/README.md).
 Параметры кэша выбираются по поддержке реально настроенной модели и API.
-Для `gpt-4.1` используются `prompt_cache_key` и совместимый legacy
-`prompt_cache_retention`. Не передавать параметры explicit breakpoints,
+Для Luna используются `prompt_cache_key` и `prompt_cache_options` с
+`mode=implicit`, `ttl=30m`. Для старых совместимых моделей, включая `gpt-4.1`,
+сохраняется legacy `prompt_cache_retention`. Не передавать параметры explicit breakpoints,
 доступные только более новым семействам, как универсальный контракт.
 
 Формат стабильного ключа:
@@ -86,8 +87,8 @@ SHA-256 от prompt, статических инструкций контекс�
 Начальные настройки:
 
 - `ASSISTANT_PROMPT_CACHE_ENABLED=true` — передавать поддерживаемые настройки.
-- Без явного `ASSISTANT_PROMPT_CACHE_RETENTION` используется `in_memory` для
-  текущего `gpt-4.1` (включая датированный snapshot).
+- Без явного `ASSISTANT_PROMPT_CACHE_RETENTION` Luna использует `30m` через
+  `prompt_cache_options`; legacy `gpt-4.1` использует `in_memory`.
 - `24h` — явная настройка при совместимой модели/API; для моделей с другим
   набором поддерживаемых значений не отправляется неподдержанный default:
   например, `gpt-5.5` получает `24h`; для неизвестных моделей retention опускается.
@@ -176,7 +177,8 @@ model projection. `prompt_cache.py` отвечает за детерминиро
 ключ сессии, совместимость retention, нормализацию и агрегацию usage.
 `BoundedHistoryMiddleware` использует тот же ledger для summary calls;
 canonical history, инструменты, progress и Save сохраняют прежний контракт.
-Модель по умолчанию и пример окружения приведены к `openai:gpt-4.1`.
+На момент реализации 012 модель по умолчанию и пример окружения были приведены
+к `openai:gpt-4.1`; текущий default заменён в [014](../014-gpt-6-luna/README.md).
 
 Offline-команды:
 

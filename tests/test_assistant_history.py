@@ -391,8 +391,8 @@ class AssistantHistoryTests(unittest.TestCase):
         service, model, _ = self.service()
         list(service.stream("Да"))
         self.assertIn("fallback:o200k_base", service.state["history_token_counter"])
-        real = HistoryTokenCounter(ChatOpenAI(model="gpt-5.5", api_key="test"))
-        self.assertFalse(real.fallback)
+        real = HistoryTokenCounter(ChatOpenAI(model="gpt-6-luna", api_key="test", reasoning_effort="none"))
+        self.assertTrue(real.fallback)
         self.assertEqual(real.encoding.name, "o200k_base")
         self.assertGreater(real.messages([HumanMessage(content="hello")]), 0)
 

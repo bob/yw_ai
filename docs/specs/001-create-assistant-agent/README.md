@@ -48,7 +48,7 @@
 сценарий описан ниже.
 
 Настройка модели: непустой `ASSISTANT_AGENT_MODEL` → непустой
-`SEQUENCE_AGENT_MODEL` → `openai:gpt-5.5`. `.env.example` использует новое имя.
+`SEQUENCE_AGENT_MODEL` → `openai:gpt-6-luna`. `.env.example` использует новое имя.
 Entrypoint приложения переименован в `src/langchain_app/assistant.py`.
 Проверка: `uv run python -m unittest discover -s tests -v` — 38 тестов без
 платных API-вызовов, включая HTTP-контракты и Streamlit Generate/Regenerate.

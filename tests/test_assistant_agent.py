@@ -4,7 +4,7 @@ import json
 import unittest
 from threading import Event
 from uuid import uuid4
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import ANY, Mock, call, patch
 
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -75,11 +75,15 @@ def assistant(factory, **kwargs):
     return AssistantAgent(factory, **kwargs)
 
 
-def selected_snapshot(model, call_index=-1):
+def selected_context(model, call_index=-1):
     system_message = model.received_messages[call_index][-1]
     context = system_message.content_blocks[-1]["text"]
     payload = next(line for line in context.splitlines() if line.startswith('{"selected_sequence":'))
-    return json.loads(payload)["selected_sequence"]
+    return json.loads(payload)
+
+
+def selected_snapshot(model, call_index=-1):
+    return selected_context(model, call_index)["selected_sequence"]
 
 
 class AssistantAgentTests(unittest.TestCase):
@@ -87,6 +91,19 @@ class AssistantAgentTests(unittest.TestCase):
         self.env = patch.dict("os.environ", {"LANGSMITH_TRACING": "false"})
         self.env.start()
         self.addCleanup(self.env.stop)
+
+    def test_default_agent_and_summary_use_luna_chat_completions_without_reasoning(self):
+        model = ToolCallingModel(responses=[AIMessage(content="")])
+        with patch("langchain_app.services.assistant_agent.init_chat_model", return_value=model) as init:
+            service = assistant(Mock())
+            list(service.stream("Hello"))
+            service._get_summary_model()
+        self.assertEqual(init.call_args_list, [
+            call("openai:gpt-6-luna", timeout=300, model_kwargs={"parallel_tool_calls": False},
+                 reasoning_effort="none", use_responses_api=False),
+            call("openai:gpt-6-luna", timeout=60, max_retries=0,
+                 reasoning_effort="none", use_responses_api=False),
+        ])
 
     def test_tool_streams_poses_before_generation_finishes(self):
         resume = Event()
@@ -210,16 +227,12 @@ class AssistantAgentTests(unittest.TestCase):
             self.assertFalse({"language", "base_url", "catalog_folder_uuid", "runtime"}
                              & set(registered_tool.tool_call_schema.model_fields))
         self.assertEqual(list(ASSISTANT_TOOLS[2].tool_call_schema.model_fields), [])
-        prompt = model.received_messages[0][0].text
         start_field = ASSISTANT_TOOLS[0].tool_call_schema.model_fields["starting_catalog_item_id"]
         self.assertFalse(start_field.is_required())
         self.assertIsNone(start_field.default)
-        self.assertIn("pass starting_catalog_item_id to generate_sequence", prompt)
-        self.assertIn("a mirrored (bilateral) pose takes 80 seconds", prompt)
-        self.assertIn("Mandatory rule: generate at most 45 elements", prompt)
-        self.assertIn("leave duration_seconds null in that case", prompt)
-        self.assertIn("Always reply in the user's language", prompt)
-        self.assertIn("keep item names and tag names exactly as returned by the API", prompt)
+        count_field = ASSISTANT_TOOLS[0].tool_call_schema.model_fields["count"]
+        self.assertFalse(count_field.is_required())
+        self.assertIsNone(count_field.default)
         factory.assert_not_called()
 
     def test_tags_then_search_then_reply_use_one_agent_and_preserve_api_names(self):
@@ -276,6 +289,30 @@ class AssistantAgentTests(unittest.TestCase):
             "Практика из одной асаны", language="en", count=1, starting_catalog_item_id=None, progress_observer=ANY,
         )
 
+    def test_request_completion_flags_follow_tools_and_reset_with_existing_selection(self):
+        generator, catalog = Mock(), Mock()
+        generator.generate.return_value = [pose(1)]
+        catalog.search.return_value = [pose(42)]
+        model = ToolCallingModel(responses=[
+            tool_call("generate_sequence", request="Create one pose", count=1), AIMessage(content=""),
+            AIMessage(content="One pose."),
+            tool_call("search_catalog_items", name="Pose 42"),
+            tool_call("show_catalog_items", catalog_item_ids=[42]), AIMessage(content=""),
+            AIMessage(content="Explanation."),
+        ])
+        service = assistant(lambda: generator, catalog_item_service=catalog, model=model)
+        list(service.stream("Create one pose"))
+        original_uuid = service.active_sequence_uuid
+        list(service.stream("How many poses?"))
+        list(service.stream("Show catalog poses"))
+        list(service.stream("Explain this pose"))
+        contexts = [selected_context(model, index) for index in range(len(model.received_messages))]
+        self.assertEqual([item["turn_operation_committed"] for item in contexts],
+                         [False, True, False, False, False, False, False])
+        self.assertEqual([item["catalog_items_displayed"] for item in contexts],
+                         [False, False, False, False, False, True, False])
+        self.assertEqual(service.active_sequence_uuid, original_uuid)
+
     def test_duration_reaches_generator_and_regeneration_keeps_mirrored_accounting(self):
         poses = [pose(n) for n in range(1, 7)]
         poses[0].catalog_tag_names = ["Other/Starting"]
@@ -288,7 +325,7 @@ class AssistantAgentTests(unittest.TestCase):
         generator = SequenceGenerator(catalog, selector)
         request = "Секвенция на четыре минуты"
         model = ToolCallingModel(responses=[
-            tool_call("generate_sequence", request=request, count=6, duration_seconds=240),
+            tool_call("generate_sequence", request=request, duration_seconds=240),
             AIMessage(content="Готово."),
         ])
         service = assistant(lambda: generator, model=model)
@@ -302,13 +339,12 @@ class AssistantAgentTests(unittest.TestCase):
         self.assertEqual(sequence.generation_request, request)
         self.assertEqual([element.start_mirror for element in sequence.elements], [True, False, True, False])
 
-    def test_generation_count_above_limit_is_rejected_before_factory_and_can_be_corrected(self):
+    def test_generation_count_above_limit_is_capped_and_reported_without_retry(self):
         generator = Mock()
         generator.generate.return_value = [pose(n) for n in range(1, 46)]
         factory = Mock(return_value=generator)
         model = ToolCallingModel(responses=[
             tool_call("generate_sequence", request="46 poses", count=46),
-            tool_call("generate_sequence", request="46 poses", count=45),
             AIMessage(content="Максимум — 45 асан."),
         ])
         service = assistant(factory, model=model)
@@ -317,8 +353,40 @@ class AssistantAgentTests(unittest.TestCase):
         generator.generate.assert_called_once_with(
             "46 poses", language="en", count=45, starting_catalog_item_id=None, progress_observer=ANY,
         )
-        self.assertEqual(model.received_messages[1][-2].status, "error")
-        self.assertIn("less than or equal to 45", model.received_messages[1][-2].content)
+        result = json.loads(model.received_messages[1][-2].content)
+        self.assertEqual(result["generation"], {
+            "limit_applied": True, "limit": 45, "requested_count": 46,
+        })
+
+    def test_tool_calculates_generation_size_and_explicit_count_overrides_duration(self):
+        cases = [
+            ({}, 9, None, False),
+            ({"count": None, "duration_seconds": None}, 9, None, False),
+            ({"duration_seconds": 1}, 1, 1, False),
+            ({"duration_seconds": 59}, 1, 59, False),
+            ({"duration_seconds": 60}, 2, 60, False),
+            ({"duration_seconds": 600}, 15, 600, False),
+            ({"duration_seconds": 3600}, 45, 3600, True),
+            ({"count": 3, "duration_seconds": 600}, 3, None, False),
+            ({"count": 50, "duration_seconds": 600}, 45, None, True),
+        ]
+        for args, count, duration, limited in cases:
+            with self.subTest(args=args):
+                generator = Mock()
+                generator.generate.return_value = [pose(n) for n in range(1, count + 1)]
+                model = ToolCallingModel(responses=[
+                    tool_call("generate_sequence", request="practice", **args),
+                    AIMessage(content=""),
+                ])
+                service = assistant(lambda: generator, model=model)
+                self.assertEqual(len(list(service.generate("practice"))), count)
+                generator.generate.assert_called_once_with(
+                    "practice", language="en", count=count, starting_catalog_item_id=None,
+                    **({"duration_seconds": duration} if duration is not None else {}),
+                    progress_observer=ANY,
+                )
+                result = json.loads(model.received_messages[1][-2].content)
+                self.assertEqual(result.get("generation", {}).get("limit_applied", False), limited)
 
     def test_invalid_duration_does_not_start_generation(self):
         for duration in (0, -1, float("inf"), float("nan")):
@@ -331,6 +399,20 @@ class AssistantAgentTests(unittest.TestCase):
                 list(service.stream("practice"))
                 factory.assert_not_called()
                 self.assertEqual(service._model.received_messages[1][-2].status, "error")
+
+    def test_duration_fulfilled_with_mirrored_poses_does_not_report_an_applied_limit(self):
+        poses = [pose(n) for n in range(1, 39)]
+        for item in poses:
+            item.bilateral = True
+        generator = Mock()
+        generator.generate.return_value = poses
+        model = ToolCallingModel(responses=[
+            tool_call("generate_sequence", request="50 minutes", duration_seconds=3000),
+            AIMessage(content=""),
+        ])
+        service = assistant(lambda: generator, model=model)
+        self.assertEqual(len(list(service.generate("50 minutes"))), 38)
+        self.assertNotIn("generation", json.loads(model.received_messages[1][-2].content))
 
     def test_generator_cannot_commit_or_stream_more_than_45_elements(self):
         generator = Mock()

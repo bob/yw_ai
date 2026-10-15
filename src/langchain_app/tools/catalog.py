@@ -25,13 +25,11 @@ def search_catalog_items(
     limit: Annotated[int, Field(ge=1, le=50, strict=True)] = 10,
     rand: bool = False,
 ) -> Command:
-    """Search real catalog items using English names and API-provided tags.
+    """Search catalog candidates without displaying them.
 
     Filters combine with AND; tag filters match any supplied tag (OR).
     Name and tag matching is partial and case-insensitive. UUID matching is exact.
     Results are limited, not ranked by relevance; an empty list is a valid result.
-    Searching does not display images. For user browsing, follow with
-    show_catalog_items using selected IDs from the latest verified results.
     """
     try:
         items = runtime.context.catalog_item_service.search(
@@ -80,19 +78,10 @@ def show_catalog_items(
     ],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
 ) -> ToolMessage:
-    """Show selected real catalog items for the user's requested browsing or selection.
-
-    Use for requests to view available poses, questions about which poses exist,
-    follow-up requests for more options, or finding replacement candidates
-    without changing a sequence. The user need not say "show"; "do not change
-    anything yet" permits display and does not require confirmation. If display
-    and a sequence operation are separately requested, display their results
-    separately. Choose IDs from the latest successful catalog
-    search, in display order. Call once with the complete selection. Do not use
-    for internal searches during generation, replacement, technique answers,
-    or tag requests alone. Empty or failed searches do not authorize display.
-    This does not generate, replace, or select a sequence and is unavailable
-    for mandatory Generate or Regenerate commands.
+    """Deliver the catalog answer as visible thumbnails, already displayed
+    when this returns. Use catalog_item_ids from the latest successful search,
+    in order.
+    Supply the complete selection in one call. Does not change a sequence.
     """
     context = runtime.context
     if context.require_generation or context.regeneration_parent is not None:
