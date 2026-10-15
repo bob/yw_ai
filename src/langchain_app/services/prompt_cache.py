@@ -96,7 +96,7 @@ class PromptCacheSettings:
         name = openai_model_name(model)
         if not self.enabled or not name:
             return {}
-        result = {"prompt_cache_key": key}
+        result: dict[str, str | dict[str, str]] = {"prompt_cache_key": key}
         supported = retention_values(name)
         retention = self.retention or (supported[0] if supported else None)
         if retention:
@@ -131,22 +131,28 @@ def reported_usage(message: AIMessage | None) -> dict:
             (raw.get("completion_tokens_details") or raw.get("output_tokens_details") or {}).get("reasoning_tokens"),
         )),
     }
-    if (result["input_tokens"] is not None and result["cached_input_tokens"] is not None
-            and result["cached_input_tokens"] > result["input_tokens"]):
-        result.update(cached_input_tokens=None, usage_error="cached_input_exceeds_input")
+    invalid_cached_count = (
+        result["input_tokens"] is not None and result["cached_input_tokens"] is not None
+        and result["cached_input_tokens"] > result["input_tokens"]
+    )
+    if invalid_cached_count:
+        result["cached_input_tokens"] = None
     result["uncached_input_tokens"] = (
         result["input_tokens"] - result["cached_input_tokens"]
         if result["input_tokens"] is not None and result["cached_input_tokens"] is not None else None
     )
+    if invalid_cached_count:
+        return {**result, "usage_error": "cached_input_exceeds_input"}
     return result
 
 
 def aggregate_usage(records: Sequence[dict]) -> dict:
     """Unknown usage stays unknown, including when only some calls report it."""
-    totals = {"calls": len(records)}
+    totals: dict[str, int | None] = {"calls": len(records)}
     for field in ("input_tokens", "cached_input_tokens", "uncached_input_tokens", "output_tokens", "reasoning_tokens"):
         values = [record.get(field) for record in records]
-        totals[field] = sum(values) if all(value is not None for value in values) else None
+        known_values = [value for value in values if value is not None]
+        totals[field] = sum(known_values) if len(known_values) == len(values) else None
     return totals
 
 
@@ -207,7 +213,7 @@ class PromptCachingMiddleware(AgentMiddleware[AssistantState, AssistantToolConte
         self.session, self.version = session, version
 
     def wrap_model_call(self, request: ModelRequest[AssistantToolContext],
-                        handler: Callable[[ModelRequest], ModelResponse]) -> ModelResponse:
+                        handler: Callable[[ModelRequest[AssistantToolContext]], ModelResponse]) -> ModelResponse:
         return self.session.call(
             request.model, self.version, "assistant", request.runtime.context.request_id,
             lambda settings: handler(request.override(model_settings={**request.model_settings, **settings})),

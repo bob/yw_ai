@@ -7,8 +7,8 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from langchain_app.schemas import GeneratedSequence
-from langchain_app.schemas.catalog import CatalogItemSchema, CatalogItemSearchResult
 from langchain_app.schemas.assistant import AssistantState
+from langchain_app.schemas.catalog import CatalogItemSchema, CatalogItemSearchResult
 from langchain_app.tools.context import AssistantToolContext
 
 

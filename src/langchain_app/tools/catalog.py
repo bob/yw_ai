@@ -8,8 +8,8 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from pydantic import Field, ValidationError
 
-from langchain_app.schemas.catalog import CatalogItemSchema
 from langchain_app.schemas.assistant import AssistantState
+from langchain_app.schemas.catalog import CatalogItemSchema
 from langchain_app.services.catalog_errors import CatalogServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
 from langchain_app.tools.results import catalog_item_result

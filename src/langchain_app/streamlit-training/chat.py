@@ -22,12 +22,12 @@ if "thread_id" not in st.session_state:
 
 model = init_chat_model(
     DEFAULT_CHAT_MODEL,
-    **chat_model_options(DEFAULT_CHAT_MODEL),
+    **chat_model_options(DEFAULT_CHAT_MODEL), # type: ignore
     temperature=0.5,
     timeout=300,
     max_tokens=25000,
     streaming=True,
-)
+) # type: ignore
 
 agent = create_agent(
     model=model,

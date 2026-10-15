@@ -12,8 +12,16 @@ from pydantic import Field
 from langchain_app.schemas import CatalogItemSchema, GeneratedSequence
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.services.catalog_errors import CatalogServiceError
-from langchain_app.services.sequence_editor import SequenceEditorError, insert_elements, replace_element, swap_elements
-from langchain_app.services.sequence_generator import MAX_SEQUENCE_ELEMENTS, generation_count
+from langchain_app.services.sequence_editor import (
+    SequenceEditorError,
+    insert_elements,
+    replace_element,
+    swap_elements,
+)
+from langchain_app.services.sequence_generator import (
+    MAX_SEQUENCE_ELEMENTS,
+    generation_count,
+)
 from langchain_app.services.type_safe import TypeSafeServiceError
 from langchain_app.tools.context import AssistantToolContext, tool_error
 from langchain_app.tools.results import commit_sequence

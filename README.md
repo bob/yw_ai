@@ -188,13 +188,13 @@ The local `.env` already enables tracing and uses the `langchain-app` project.
 Then run:
 
 ```bash
-uv run --env-file .env langchain-app
+uv run --env-file .env src/langchain_app/langchain-training/first.py
 ```
 
 To trace the second example, run:
 
 ```bash
-uv run --env-file .env src/langchain_app/second.py
+uv run --env-file .env src/langchain_app/langchain-training/second.py
 ```
 
 The runs appear in the `langchain-app` project at

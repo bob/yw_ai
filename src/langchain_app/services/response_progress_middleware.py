@@ -5,18 +5,36 @@ from collections.abc import Callable
 from time import monotonic
 from uuid import UUID, uuid4
 
-from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest, wrap_model_call, wrap_tool_call
+from langchain.agents.middleware import (
+    AgentMiddleware,
+    ModelRequest,
+    ModelResponse,
+    ToolCallRequest,
+    wrap_model_call,
+    wrap_tool_call,
+)
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from langchain_app.schemas import CatalogItemSchema
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.schemas.response_progress import (
-    AssistantMessageEvent, CatalogItemsDisplayedEvent, SequenceElementEvent,
-    StepFinishedEvent, StepProgressEvent, StepStartedEvent,
+    AssistantMessageEvent,
+    CatalogItemsDisplayedEvent,
+    SequenceElementEvent,
+    StepFinishedEvent,
+    StepProgressEvent,
+    StepStartedEvent,
 )
-from langchain_app.services.response_progress import PendingSequenceCommit, ProgressSignal
-from langchain_app.services.sequence_generator import GeneratorAdditionProgress, GeneratorSearchProgress, MAX_SEQUENCE_ELEMENTS
+from langchain_app.services.response_progress import (
+    PendingSequenceCommit,
+    ProgressSignal,
+)
+from langchain_app.services.sequence_generator import (
+    MAX_SEQUENCE_ELEMENTS,
+    GeneratorAdditionProgress,
+    GeneratorSearchProgress,
+)
 from langchain_app.tools.context import AssistantToolContext
 
 TOOL_STEPS = {

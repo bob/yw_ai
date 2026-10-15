@@ -12,12 +12,18 @@ from langchain_app.services.catalog_item import CatalogItemService
 from langchain_app.services.sequence_editor import same_catalog_item
 from langchain_app.services.sequence_rules import (
     MAX_SEQUENCE_ELEMENTS,
-    STARTING_TAG,
     STANDING_TAG,
-    has_catalog_uuid as _has_catalog_uuid,
-    is_lying as _is_lying,
-    second_pose_allowed as _second_pose_allowed,
+    STARTING_TAG,
     starting_pose_allowed,
+)
+from langchain_app.services.sequence_rules import (
+    has_catalog_uuid as _has_catalog_uuid,
+)
+from langchain_app.services.sequence_rules import (
+    is_lying as _is_lying,
+)
+from langchain_app.services.sequence_rules import (
+    second_pose_allowed as _second_pose_allowed,
 )
 from langchain_app.services.type_safe import TypeSafeSelectionError, TypeSafeService
 
@@ -158,8 +164,9 @@ class SequenceGenerator:
                     with_tags=True, with_rigman=False, limit=0, rand=True
                 )
                 if item.image_url is not None
-                and (not require_catalog_uuid or _has_catalog_uuid(item))
             ]
+            if require_catalog_uuid:
+                catalog_items = [item for item in catalog_items if _has_catalog_uuid(item)]
         except Exception:
             if progress_observer is not None:
                 progress_observer(GeneratorSearchProgress("finished", outcome="error"))

@@ -4,22 +4,35 @@ import json
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from math import ceil
 from time import monotonic
+from typing import Literal, NotRequired, TypedDict, cast
 from uuid import uuid4
 
 import tiktoken
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langgraph.runtime import Runtime
 from pydantic import BaseModel, ConfigDict
 
 from langchain_app.model_config import DEFAULT_OPENAI_MODEL
 from langchain_app.schemas.assistant import AssistantState
 from langchain_app.schemas.response_progress import StepFinishedEvent, StepStartedEvent
+from langchain_app.services.prompt_cache import (
+    PromptCacheSession,
+    prefix_version,
+    reported_usage,
+)
 from langchain_app.services.response_progress import ProgressSignal
-from langchain_app.services.prompt_cache import PromptCacheSession, prefix_version, reported_usage
 from langchain_app.tools.context import AssistantToolContext
 
 PROJECTION_VERSION = 1
@@ -74,6 +87,11 @@ class HistorySummary(BaseModel):
     pending_clarification: str | None
     relevant_facts: list[str]
     response_language: str | None
+
+
+class _SummaryModelSettings(TypedDict):
+    max_tokens: int
+    reasoning_effort: NotRequired[Literal["none"]]
 
 
 SUMMARY_PROMPT = (
@@ -133,7 +151,7 @@ class HistoryTokenCounter:
         return ceil(total * 1.25)
 
 
-def compact_history(messages: Sequence[BaseMessage]) -> list[BaseMessage]:
+def compact_history(messages: Sequence[AnyMessage]) -> list[AnyMessage]:
     """Project pre-009 sequence results without rewriting stored messages."""
     calls = {
         call["id"]: call["name"] for message in messages if isinstance(message, AIMessage)
@@ -178,7 +196,7 @@ def compact_history(messages: Sequence[BaseMessage]) -> list[BaseMessage]:
     return projected
 
 
-def summary_context(summary: str, incomplete: bool = False) -> list[BaseMessage]:
+def summary_context(summary: str, incomplete: bool = False) -> list[AnyMessage]:
     blocks = []
     if summary:
         blocks.append(SystemMessage(content=SUMMARY_CONTEXT + summary))
@@ -202,7 +220,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
         self.prefix_version = prefix_version(SUMMARY_PROMPT)
 
     def _suffix_start(
-        self, messages: list[BaseMessage], boundaries: list[int],
+        self, messages: list[AnyMessage], boundaries: list[int],
         summary: str, limit: int, *, reserve: bool = False, incomplete: bool = False,
     ) -> int:
         # Find the fullest continuous suffix of WHOLE completed turns. Even the
@@ -217,7 +235,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
         return boundaries[-1]
 
     def before_agent(self, state: AssistantState, runtime: Runtime[AssistantToolContext]) -> dict:
-        current = state["history_turn_start"]
+        current = state.get("history_turn_start", 0)
         boundaries = list(state.get("history_turn_starts", []))
         # A transcript from a pre-010 session is one indivisible legacy prefix.
         # New turns always use explicit request lifecycle offsets, not AI text.
@@ -246,7 +264,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
             "previous_summary": json.loads(summary) if summary else None,
             "newly_covered_turns": [
                 [self._summary_message(message) for message in messages[left:right]]
-                for left, right in zip(available, available[1:]) if right <= start
+                for left, right in pairwise(available) if right <= start
             ],
         }, ensure_ascii=False))]
         step_id, started = uuid4(), monotonic()
@@ -260,7 +278,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
         }
         try:
             summarizer = self.summarizer_factory()
-            settings = {"max_tokens": self.budget.summary_max_tokens}
+            settings: _SummaryModelSettings = {"max_tokens": self.budget.summary_max_tokens}
             name = getattr(summarizer, "model_name", "")
             if name.startswith("gpt-5") or name == DEFAULT_OPENAI_MODEL:
                 settings["reasoning_effort"] = "none"
@@ -293,7 +311,7 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
                 "history_projection_start": start,
             })
             accounting["status"] = "ok"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Any summary failure must fall back to recent history.
             # Preserve coverage and summary, and never feed oversized history
             # back to the main model. Retry only on a later user request.
             accounting.update({"status": "error", "error_type": type(exc).__name__})
@@ -325,8 +343,8 @@ class BoundedHistoryMiddleware(AgentMiddleware[AssistantState, AssistantToolCont
         self, request: ModelRequest[AssistantToolContext],
         handler: Callable[[ModelRequest[AssistantToolContext]], ModelResponse],
     ) -> ModelResponse:
-        state = request.state
-        current = state["history_turn_start"]
+        state = cast(AssistantState, request.state)
+        current = state.get("history_turn_start", 0)
         start = state.get("history_projection_start", 0)
         # Tools and all intermediate messages of this invocation stay intact.
         completed = compact_history(request.messages[start:current])

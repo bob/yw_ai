@@ -5,7 +5,11 @@ from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
-from langchain_app.schemas import CatalogItemSchema, GeneratedSequence, GeneratedSequenceElement
+from langchain_app.schemas import (
+    CatalogItemSchema,
+    GeneratedSequence,
+    GeneratedSequenceElement,
+)
 from langchain_app.services.sequence_rules import (
     MAX_SEQUENCE_ELEMENTS,
     has_catalog_uuid,

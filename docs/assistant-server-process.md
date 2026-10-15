@@ -1610,7 +1610,7 @@ get_sequence_view()
 
 `chat.py`, `langchain-training/`, `streamlit-training/` и `typesafe-training/` содержат отдельные примеры. `assistant.py` не вызывает их как этапы обработки запроса.
 
-Команда `uv run langchain-app` использует другой entrypoint из `[project.scripts]`. Для описанного сервера нужна команда Streamlit из раздела 1.
+Учебные примеры запускаются напрямую по пути к Python-файлу. Для описанного сервера нужна команда Streamlit из раздела 1.
 
 ### 20.5. Карта файлов для чтения кода
 
