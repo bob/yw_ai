@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SequenceRenderer.render_response · workflow</title>
+<style>
+:root{color-scheme:light;--bg:#f7f8fa;--paper:#fff;--ink:#222631;--muted:#626b7a;--line:#e1e5eb;--red:#ff4b4b;--red-light:#fff0ef;--green:#23734d;--green-light:#edf8f1;--blue:#255e9f;--blue-light:#edf4fc;--amber:#91620e;--amber-light:#fff8e9;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1280px;margin:auto;padding:42px 36px 70px}h1,h2,h3,p{margin:0}h1{font-size:clamp(25px,3.4vw,40px);line-height:1.2;letter-spacing:-1.2px;overflow-wrap:anywhere}h2{font-size:24px;line-height:1.3;letter-spacing:-.5px;margin-bottom:12px}h3{font-size:16px;margin-bottom:8px}p+p{margin-top:12px}a{color:var(--blue);text-underline-offset:3px}code,pre{font-family:var(--mono)}code{font-size:.88em;background:#eef0f4;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{font-size:12px;line-height:1.75;background:#f5f6f8;border:1px solid var(--line);border-radius:12px;padding:18px;overflow:auto;margin:14px 0}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.eyebrow{font:11px/1.4 var(--mono);letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}.lead{font-size:17px;color:var(--muted);max-width:900px;margin-top:14px}.signature{display:block;margin-top:19px;font-size:12px;padding:12px 15px;background:white;border:1px solid var(--line);border-radius:9px;overflow:auto;white-space:nowrap}.tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin:30px 0 24px;overflow:auto}button,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #85b7f1;outline-offset:3px}.tab{border:0;background:none;padding:13px 17px;white-space:nowrap;color:var(--muted);border-bottom:3px solid transparent}.tab[aria-selected=true]{color:var(--ink);border-color:var(--red);font-weight:650}.panel[hidden]{display:none}.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:24px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.note{padding:14px 17px;border-radius:9px;border-left:3px solid var(--blue);background:var(--blue-light);margin:16px 0;font-size:14px}.note.green{background:var(--green-light);border-color:var(--green)}.note.amber{background:var(--amber-light);border-color:var(--amber)}.note.red{background:var(--red-light);border-color:var(--red)}.small{font-size:12px;color:var(--muted)}.source{display:block;font:11px/1.7 var(--mono);margin-top:15px;color:var(--muted)}.source a{color:inherit}.badge{font:11px/1.3 var(--mono);padding:5px 8px;border-radius:5px;background:var(--blue-light);color:var(--blue);display:inline-block}.badge.green{color:var(--green);background:var(--green-light)}.badge.amber{color:var(--amber);background:var(--amber-light)}.badge.red{color:#b32b2b;background:var(--red-light)}.flow{display:flex;align-items:stretch;gap:9px;margin:22px 0;overflow:auto;padding-bottom:4px}.flow-node{flex:1;min-width:135px;padding:15px;background:white;border:1px solid var(--line);border-radius:10px;font-size:13px}.flow-node b{display:block;font-size:13px}.flow-node small{color:var(--muted)}.arrow{align-self:center;color:#9ba2af}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px}.steps{display:flex;flex-direction:column;gap:6px}.phase{display:flex;gap:12px;text-align:left;padding:12px;border:1px solid transparent;border-radius:10px;background:none;line-height:1.35;color:var(--muted)}.phase:hover{background:#eef0f3}.phase[aria-pressed=true]{background:white;border-color:var(--line);color:var(--ink);box-shadow:inset 3px 0 var(--red)}.phase .num{font:12px var(--mono);padding-top:2px;color:var(--red)}.phase b{display:block;font-size:13px}.phase small{font-size:11px}.phase-body{min-height:425px}.phase-body ul{margin:12px 0 0;padding-left:22px}.phase-body li{margin:7px 0}.chapter[hidden]{display:none}.slots{display:grid;gap:8px;margin:16px 0}.slot{border:1px solid var(--line);border-radius:8px;padding:11px 14px;font-size:13px;display:flex;gap:12px;align-items:center}.slot b{font:11px var(--mono);min-width:130px}.slot .hint{color:var(--muted)}.section-label{font:11px var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:22px 0 10px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:10px 12px;background:#f7f8fa}td{padding:13px 12px;border-top:1px solid var(--line);vertical-align:top}td code{font-size:11px}details{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:13px;padding:16px 20px}summary{cursor:pointer;font-weight:650;font-size:14px}details p{font-size:14px;margin-top:12px}.tree{white-space:pre;font-family:var(--mono);font-size:12px;line-height:1.9}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:16px 0}select{border:1px solid var(--line);border-radius:7px;padding:9px 12px;background:white;max-width:100%;font-size:13px}.btn{border:1px solid var(--line);border-radius:7px;background:#fff;padding:8px 13px;font-size:13px}.btn.primary{background:var(--red);color:#fff;border-color:var(--red)}.btn:disabled{opacity:.35;cursor:default}.sim-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:20px}.event-feed{height:420px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:7px;background:#f8f9fb}.event-row{padding:10px;border-radius:7px;border:1px solid transparent;font:11px/1.7 var(--mono);color:var(--muted);cursor:pointer}.event-row:hover{background:#eef0f4}.event-row.active{background:white;border-color:#ffb7b0;color:var(--ink)}.event-row.future{opacity:.45}.event-row b{font-weight:600}.event-detail{font-size:13px;min-height:75px;padding:12px 14px;background:var(--blue-light);border-radius:8px;margin-bottom:13px}.mock{border:1px solid var(--line);border-radius:11px;padding:20px;background:white}.mock-title{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:14px}.status-box{border:1px solid var(--line);border-radius:7px;padding:12px;font-size:13px}.status-box.error{background:var(--red-light);border-color:#ffc9c1}.status-box.complete{background:var(--green-light);border-color:#cce6d5}.mock-slot{font-size:13px;margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;min-height:40px}.mock-slot .small{display:block;margin-bottom:6px;font:10px var(--mono);text-transform:uppercase;letter-spacing:.5px}.poses{display:flex;flex-wrap:wrap;gap:7px}.pose{padding:9px 12px;background:#f0f4f0;border:1px solid #d5e2d6;border-radius:7px;font-size:11px;color:var(--green)}.placeholder{font-size:12px;color:#9299a5}.empty-removed{color:#a33;font-size:12px}.commit-chain{counter-reset:commit}.commit-step{display:flex;gap:15px;padding:15px 0;border-bottom:1px solid var(--line)}.commit-step:before{counter-increment:commit;content:counter(commit);flex:none;border:1px solid #cce6d5;background:var(--green-light);color:var(--green);width:28px;height:28px;border-radius:50%;text-align:center;line-height:27px;font:12px/27px var(--mono)}.commit-step p{font-size:13px;margin-top:4px}.stack{display:grid;gap:16px}.footer{margin-top:30px;padding-top:15px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+@media(max-width:850px){main{padding:25px 18px 45px}.layout{grid-template-columns:1fr}.steps{display:grid;grid-template-columns:1fr 1fr}.grid,.sim-grid{grid-template-columns:1fr}.card{padding:18px}.flow{gap:6px}.phase-body{min-height:0}.tab{padding:11px;font-size:13px}.slot{align-items:flex-start;flex-direction:column;gap:3px}.event-feed{height:310px}.signature{font-size:10px}}
+@media(prefers-reduced-motion:no-preference){.chapter{animation:appear .16s ease-out}@keyframes appear{from{opacity:.4;transform:translateY(3px)}to{opacity:1;transform:none}}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Source walkthrough · yoga assistant · read-only explanation</div>
+  <h1>SequenceRenderer.<wbr>render_response</h1>
+  <p class="lead">One request → ordered public events → live UI → a replayable <code>ChatMessage</code>. The temporary gallery becomes a durable session result only after the agent confirms a state commit.</p>
+  <code class="signature">render_response(request: str, *, content: str, key: str, require_generation=False, pending=None) → ChatMessage</code>
+
+  <div class="flow" aria-label="Workflow overview">
+    <div class="flow-node"><b>1 · Accept request</b><small>PendingResponse</small></div><span class="arrow">→</span>
+    <div class="flow-node"><b>2 · Reserve UI</b><small>Status + 3 placeholders</small></div><span class="arrow">→</span>
+    <div class="flow-node"><b>3 · Consume events</b><small>Filter → reduce → draw</small></div><span class="arrow">→</span>
+    <div class="flow-node"><b>4 · Confirm result</b><small>Commit or discard preview</small></div><span class="arrow">→</span>
+    <div class="flow-node"><b>5 · Return & replay</b><small>Caller saves + reruns</small></div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Workflow views">
+    <button class="tab" id="tab-walk" role="tab" aria-selected="true" aria-controls="walk" data-tab="walk">Step by step</button>
+    <button class="tab" id="tab-events" role="tab" aria-selected="false" aria-controls="events" data-tab="events">Event explorer</button>
+    <button class="tab" id="tab-producer" role="tab" aria-selected="false" aria-controls="producer" data-tab="producer">Producer & commit</button>
+    <button class="tab" id="tab-result" role="tab" aria-selected="false" aria-controls="result" data-tab="result">Results & failures</button>
+  </nav>
+
+  <section class="panel" id="walk" role="tabpanel" aria-labelledby="tab-walk">
+    <div class="layout">
+      <nav class="steps" aria-label="Method phases">
+        <button class="phase" data-phase="0" aria-pressed="true"><span class="num">01</span><span><b>Enter the method</b><small>Arguments and request identity</small></span></button>
+        <button class="phase" data-phase="1" aria-pressed="false"><span class="num">02</span><span><b>Build the live shell</b><small>Stable visual order · L281–296</small></span></button>
+        <button class="phase" data-phase="2" aria-pressed="false"><span class="num">03</span><span><b>Start & guard the stream</b><small>Factory, timing, ordering · L297–307</small></span></button>
+        <button class="phase" data-phase="3" aria-pressed="false"><span class="num">04</span><span><b>Route each accepted event</b><small>Text and two galleries · L308–320</small></span></button>
+        <button class="phase" data-phase="4" aria-pressed="false"><span class="num">05</span><span><b>Promote the committed view</b><small>State is the authority · L321–327</small></span></button>
+        <button class="phase" data-phase="5" aria-pressed="false"><span class="num">06</span><span><b>Close the attempt</b><small>Errors, cleanup, family · L328–339</small></span></button>
+        <button class="phase" data-phase="6" aria-pressed="false"><span class="num">07</span><span><b>Package the return value</b><small>Snapshot + view + variants · L340–356</small></span></button>
+        <button class="phase" data-phase="7" aria-pressed="false"><span class="num">08</span><span><b>Save & replay in the caller</b><small>Session history and rerun</small></span></button>
+      </nav>
+      <article class="card phase-body">
+        <div class="chapter" data-chapter="0">
+          <span class="badge">Boundary · Streamlit → renderer</span><h2>Three entry points share one lifecycle</h2>
+          <pre>Chat submit ─── PendingResponse(request)
+Generate ────── PendingResponse(request, require_generation=True)
+Regenerate ──── PendingResponse(request, require_generation=True,
+                              sequence_uuid=selected_uuid,
+                              message_index=existing_card)
+                         │
+                         ▼
+assistant.py → render_response(pending.request, content="", ...)</pre>
+          <ul><li><code>request</code> is the text passed to the agent. Regeneration resolves the original generation request from its parent snapshot.</li><li><code>content</code> is a prefix displayed immediately and prepended to all final public text.</li><li><code>key</code> namespaces the catalog and sequence widget containers.</li><li><code>pending</code> carries the request UUID, acceptance time, generation flag and regeneration source. If supplied, its flag overrides the method’s <code>require_generation</code> argument.</li></ul>
+          <p class="small">Without pending, the method creates a fresh PendingResponse. message_index is used by the caller when saving the result.</p>
+          <span class="source"><a href="../src/langchain_app/ui/response_progress.py#L24">ui/response_progress.py:24–47</a> · <a href="../src/langchain_app/assistant.py#L46">assistant.py:46–56, 98–102</a></span>
+        </div>
+        <div class="chapter" data-chapter="1" hidden>
+          <span class="badge">UI · fixed slot order</span><h2>Show feedback before loading dependencies</h2>
+          <div class="slots"><div class="slot"><b>progress.status</b><span>“Thinking...” · running · expanded</span></div><div class="slot"><b>catalog_output</b><span class="hint">st.empty() → explicit catalog display</span></div><div class="slot"><b>sequence_output</b><span class="hint">st.empty() → preview → committed sequence</span></div><div class="slot"><b>text_output</b><span class="hint">st.empty() → content + final public replies</span></div></div>
+          <p>All four live areas belong to <code>st.chat_message("assistant")</code>. Reserving both galleries above the text keeps late replies below thumbnails.</p>
+          <pre>sequence = None           # no committed result yet
+catalog_items = None      # no explicit display yet
+provisional = create_sequence_view(language)
+thumbnails = []
+provisional["thumbnails"] = thumbnails  # shared growing list</pre>
+          <p class="small">The provisional view has a temporary UUID, “New Sequence”, id=0 and elements_count=0. Only its thumbnail list grows; the committed snapshot later replaces its metadata.</p>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L281">ui/sequence.py:281–296</a> · <a href="../src/langchain_app/ui/response_progress.py#L103">ui/response_progress.py:103–117</a></span>
+        </div>
+        <div class="chapter" data-chapter="2" hidden>
+          <span class="badge">Control · accept before drawing</span><h2>Initialize once, then filter every event</h2>
+          <pre>assistant = generator_factory()  # session_assistant in the app
+for event in assistant.stream_response_events(
+    request,
+    require_generation=pending.require_generation,
+    regenerate_sequence_uuid=pending.sequence_uuid,
+    request_id=pending.request_id,
+):
+    if not progress.accept(event):
+        continue</pre>
+          <p><code>ResponseProgressRenderer.accept()</code> first checks the request UUID and shifts producer timestamps to include the time since the UI accepted the request. It delegates state reduction to <code>ResponseExecution.accept()</code>.</p>
+          <ul><li>Reject a foreign request UUID.</li><li>Reject an event index ≤ the last accepted index, or any event after the terminal result.</li><li>Suppress duplicate public messages with the same <code>(purpose, message_id)</code>.</li><li>Store execution state, update step rows and refresh the status label before the outer method draws content.</li></ul>
+          <p class="small">Step references are expected to be valid and ordered by the producer; the reducer does not validate every step reference itself.</p>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L297">ui/sequence.py:297–307</a> · <a href="../src/langchain_app/ui/response_progress.py#L119">ui/response_progress.py:119–140</a> · <a href="../src/langchain_app/services/response_execution.py#L38">services/response_execution.py:38–71</a></span>
+        </div>
+        <div class="chapter" data-chapter="3" hidden>
+          <span class="badge">Rendering · three projections</span><h2>Reduce first, then redraw the affected view</h2>
+          <pre>on every accepted event:
+  text = content + "".join(execution.final_texts)
+  if text: redraw text_output
+
+  if CatalogItemsDisplayedEvent and catalog_items is None:
+    deep-copy items → draw catalog gallery once
+  elif SequenceElementEvent:
+    item → thumbnail; set order = event.order
+    append to shared list → redraw entire provisional gallery
+  elif SequenceCommittedEvent:
+    load committed snapshot → draw full sequence</pre>
+          <p>Final text arrives as whole public messages. Intermediate messages are shown inside the progress area; they do not enter <code>ChatMessage.content</code>.</p>
+          <div class="note">A search result alone does not draw a catalog gallery. A successful explicit <code>show_catalog_items</code> call produces the display event. This renderer uses only the first display event per attempt.</div>
+          <p class="small">Preview conversion skips items without image_url and copies bilateral to both mirror flags. self.render() draws info, then ThumbnailRenderer draws the full current list. The 0.05-second helper is not used on this path.</p>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L308">ui/sequence.py:308–327, 115–149, 362–403</a> · <a href="../src/langchain_app/ui/thumbnails.py#L98">ui/thumbnails.py:98</a></span>
+        </div>
+        <div class="chapter" data-chapter="4" hidden>
+          <span class="badge green">State · authoritative snapshot</span><h2>A commit event is a reference, not the sequence</h2>
+          <pre>SequenceCommittedEvent(sequence_uuid)
+  assistant.get_sequence(str(sequence_uuid))
+    assistant.state → detached checkpoint values
+    GeneratedSequence.from_snapshot(...)
+  if missing: raise ValueError
+  sequence = generated_sequence_view(committed)
+  sequence_output.container()
+    self.render(sequence, key=f"{key}-{event.event_index}")</pre>
+          <p><code>generated_sequence_view()</code> maps the saved UUID, name, description, language and computed count into <code>info</code>, and maps every element into a thumbnail with its saved order and mirror flags.</p>
+          <div class="note green">This assignment is the promotion point: <code>sequence</code> stops being None. The returned card now comes from the stored variant, independently of the temporary thumbnail list.</div>
+          <p class="small">Generation streams previews. Replace, swap and add operations can commit a new complete variant without streaming provisional thumbnails.</p>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L321">ui/sequence.py:321–327, 64–83</a> · <a href="../src/langchain_app/services/assistant_agent.py#L182">services/assistant_agent.py:182–204</a></span>
+        </div>
+        <div class="chapter" data-chapter="5" hidden>
+          <span class="badge amber">Finalization · success or failure</span><h2>Close the attempt and remove uncommitted previews</h2>
+          <pre>except Exception as exc:
+  execution.fail(elapsed_since_acceptance,
+                 error_message=public_request_error(exc))
+
+execution_snapshot = progress.finish()
+if sequence is None:
+  sequence_output.empty()
+else:
+  snapshots = assistant.get_sequence_variants(sequence["info"]["uuid"])</pre>
+          <p>The producer normally emits its terminal error before raising. <code>fail()</code> is idempotent when a terminal event already exists. It also covers factory failures where no event stream was created.</p>
+          <ul><li><code>finish()</code> synthesizes an error if the stream ended without a terminal event, redraws all step rows, sets the final status and displays any public error.</li><li>No committed sequence → clear the temporary sequence gallery.</li><li>A committed sequence survives a later model failure. Catalog output is also retained if it was already displayed.</li></ul>
+          <p class="small">The try/except covers factory initialization and event consumption. Final snapshot creation and variant lookup occur after that catch block.</p>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L328">ui/sequence.py:328–339</a> · <a href="../src/langchain_app/ui/response_progress.py#L175">ui/response_progress.py:175–184</a> · <a href="../src/langchain_app/services/response_execution.py#L73">services/response_execution.py:73–90</a></span>
+        </div>
+        <div class="chapter" data-chapter="6" hidden>
+          <span class="badge">Return · plain application data</span><h2>Package the attempt and its sequence family</h2>
+          <pre>ChatMessage {
+  role: "assistant",
+  content: content + joined final public messages,
+  execution: terminal ExecutionSnapshot,
+  sequence: committed SequenceView | None,
+  sequence_uuid: committed UUID string | None,
+  sequence_variant_uuids: family UUIDs in creation order,
+  sequence_request: selected snapshot.generation_request
+                    or request if no snapshots,
+  sequence_variants: family snapshots → SequenceViews,
+  selected_sequence_index: index matching committed UUID, else 0,
+  catalog_items?: deep-copied explicit display items
+}</pre>
+          <p>Full catalog and sequence records remain in the agent’s state. Display views are disposable projections; the execution snapshot stores public progress, intermediate messages, outcome and timing.</p>
+          <div class="note">The method returns this message. It does not append it to session chat history or trigger a Streamlit rerun.</div>
+          <span class="source"><a href="../src/langchain_app/ui/sequence.py#L340">ui/sequence.py:340–356</a> · <a href="../src/langchain_app/schemas/chat.py">schemas/chat.py</a></span>
+        </div>
+        <div class="chapter" data-chapter="7" hidden>
+          <span class="badge">Caller · persistence across reruns</span><h2>The app saves the response, then redraws history</h2>
+          <pre>assistant.py
+  response = renderer.render_response(...)
+  if pending.message_index is None:
+    messages.append(response)       # including empty/error attempts
+  else:
+    retain_execution(existing_card, response.execution)
+    merge new content / committed sequence / family when present
+  finally:
+    pending_response = None
+    sequence-prompt-reset = request_id
+  st.rerun()
+    renderer.render_messages(messages)</pre>
+          <p>Regenerate updates the existing card and archives its previous execution. If regeneration fails before commit, the old sequence remains on that card. A new sequence can clear an old reply even when its new reply is empty.</p>
+          <p>History replay renders saved execution snapshots, catalog items, sequence controls and final text. Variant UUIDs allow views to be rebuilt from agent state. Browsing variants updates the selected sequence without another model call.</p>
+          <p class="small">“Saved” here means this session: chat lives in st.session_state, and the agent uses InMemorySaver. Catalog import is a separate history-card action.</p>
+          <span class="source"><a href="../src/langchain_app/assistant.py#L98">assistant.py:98–123</a> · <a href="../src/langchain_app/ui/sequence.py#L175">ui/sequence.py:175–274</a> · <a href="../src/langchain_app/ui/response_progress.py#L50">ui/response_progress.py:50–54, 76–100</a></span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" id="events" role="tabpanel" aria-labelledby="tab-events" hidden>
+    <div class="card">
+      <h2>Step through the event boundary</h2>
+      <p>Illustrative event traces using the actual event types and routing rules. Click an event or use Next to see the accumulated UI state.</p>
+      <div class="controls"><label for="scenario" class="small">Scenario</label><select id="scenario"><option value="generate">Generate a sequence</option><option value="chat">Plain chat</option><option value="catalog">Show catalog items</option><option value="before">Failure before commit</option><option value="after">Failure after commit</option></select><button class="btn" id="prev">← Back</button><button class="btn primary" id="next">Next →</button><button class="btn" id="reset">Reset</button><span class="small" id="counter"></span></div>
+      <div class="sim-grid">
+        <div><div class="event-feed" id="feed" aria-label="Event trace"></div><p class="small" style="margin-top:8px">All shown events belong to one request and have increasing indexes. Cleanup is a method action after iteration, not a public event.</p></div>
+        <div><div class="event-detail" id="event-detail" aria-live="polite"></div><div class="mock"><div class="mock-title">Assistant message · reserved slots</div><div id="mock-status" class="status-box">Thinking...</div><div class="mock-slot"><span class="small">catalog_output</span><div id="mock-catalog"></div></div><div class="mock-slot"><span class="small">sequence_output</span><div id="mock-sequence"></div></div><div class="mock-slot"><span class="small">text_output</span><div id="mock-text"></div></div></div><div class="note green" id="sim-state" style="font-size:12px"></div></div>
+      </div>
+    </div>
+    <details><summary>Exact event routing reference</summary><div class="table-wrap"><table><thead><tr><th>Event</th><th>Progress / reducer</th><th>Outer render_response</th></tr></thead><tbody>
+      <tr><td><code>RequestStartedEvent</code></td><td>Store source sequence UUID</td><td>No gallery action</td></tr>
+      <tr><td><code>StepStartedEvent</code></td><td>Create row, store start, update label</td><td>No gallery action</td></tr>
+      <tr><td><code>StepProgressEvent</code></td><td>Append progress, redraw row and counters</td><td>No gallery action</td></tr>
+      <tr><td><code>StepFinishedEvent</code></td><td>Store outcome and duration, redraw</td><td>No gallery action</td></tr>
+      <tr><td><code>AssistantMessageEvent</code></td><td>Intermediate → status; final → final_texts</td><td>Rewrite content + all final_texts</td></tr>
+      <tr><td><code>CatalogItemsDisplayedEvent</code></td><td>Accepted, no execution payload retained</td><td>Deep-copy and render the first display only</td></tr>
+      <tr><td><code>SequenceElementEvent</code></td><td>Accepted, no element stored in execution</td><td>Append thumbnail and redraw preview</td></tr>
+      <tr><td><code>SequenceCommittedEvent</code></td><td>Store UUID; show saved-in-session caption</td><td>Read saved snapshot; replace sequence gallery</td></tr>
+      <tr><td><code>RequestFinishedEvent</code></td><td>Store terminal result; status complete/error</td><td>Final text refresh; cleanup follows stream completion</td></tr>
+    </tbody></table></div><span class="source"><a href="../src/langchain_app/schemas/response_progress.py#L75">schemas/response_progress.py:75–137</a> · <a href="../src/langchain_app/services/response_execution.py#L38">services/response_execution.py:38–71</a></span></details>
+  </section>
+
+  <section class="panel" id="producer" role="tabpanel" aria-labelledby="tab-producer" hidden>
+    <div class="grid">
+      <article class="card"><span class="badge">Upstream · public event producer</span><h2>Where the events come from</h2>
+        <pre class="tree">render_response
+└─ AssistantAgent.stream_response_events
+   ├─ ResponseProgress → RequestStartedEvent
+   ├─ resolve regeneration parent, if supplied
+   ├─ build AssistantToolContext
+   ├─ _get_agent() → create_agent (lazy)
+   ├─ repair unanswered failed tool calls
+   └─ agent.stream_events(...)
+      version="v3", durability="sync"
+      interleave("custom", "values")
+      ├─ custom → progress.accept(signal)
+      └─ values → progress.confirm_commits(state)
+                  │
+                  ▼
+             typed ResponseEvent
+                  │
+                  ▼
+             progress UI → gallery / text</pre>
+        <p class="small">The outer loop consumes normalized public events, rather than handling raw LangChain stream packets. One producer assigns request_id, event_index and elapsed_seconds.</p>
+        <span class="source"><a href="../src/langchain_app/services/assistant_agent.py#L271">services/assistant_agent.py:271–344</a> · <a href="../src/langchain_app/services/response_progress.py#L37">services/response_progress.py:37–104</a></span>
+      </article>
+      <article class="card"><span class="badge green">Commit · preview → saved variant</span><h2>The confirmation handshake</h2>
+        <div class="commit-chain">
+          <div class="commit-step"><div><b>Tool builds a complete variant</b><p><code>commit_sequence()</code> returns a Command containing the full snapshot, active_sequence_uuid, turn_operation_committed=True and a compact ToolMessage.</p></div></div>
+          <div class="commit-step"><div><b>Middleware announces a pending commit</b><p>For a successful state-changing Command, it emits <code>PendingSequenceCommit</code> and defers the tool’s StepFinishedEvent.</p></div></div>
+          <div class="commit-step"><div><b>The graph applies and checkpoints state</b><p>The stream uses sync durability so <code>get_state()</code> can read the variant before the UI is told it exists.</p></div></div>
+          <div class="commit-step"><div><b>ResponseProgress checks merged values</b><p>The UUID must exist in sequences, equal active_sequence_uuid, and have turn_operation_committed=True. Each UUID is confirmed once.</p></div></div>
+          <div class="commit-step"><div><b>Commit, then finish the tool step</b><p>Emit SequenceCommittedEvent, then StepFinishedEvent. The UI fetches the saved snapshot and replaces the preview.</p></div></div>
+        </div>
+        <span class="source"><a href="../src/langchain_app/tools/results.py#L22">tools/results.py:22–48</a> · <a href="../src/langchain_app/services/response_progress_middleware.py#L219">services/response_progress_middleware.py:219–227</a> · <a href="../src/langchain_app/services/response_progress.py#L74">services/response_progress.py:74–104</a></span>
+      </article>
+    </div>
+    <details open><summary>Generation path: from the model’s tool call to streamed poses</summary>
+      <pre class="tree">model_response_progress
+  StepStarted(thinking) → call model
+  tool call + public text? → AssistantMessage(intermediate)
+  StepFinished(thinking)
+  no tool calls + public text? → preparing_response + final message
+
+tool_response_progress(generate_sequence)
+  StepStarted(generating_sequence), optional initial 0/N counter
+  tools.sequence.generate_sequence
+    validate request; prevent a second operation; resolve size; cap at 45
+    SequenceGenerator.generate
+      load catalog items with images + tags; omit rigman data
+        GeneratorSearchProgress → nested searching step
+      choose requested first pose or weighted random starting pose
+      yield first pose
+      loop: filter unused / positional candidates
+        choose candidate batch; prefer finishing candidates at the end
+        TypeSafeService.choose_next_catalog_item
+        yield next pose
+    each yielded item → stream_writer(item)
+      middleware → SequenceElementEvent + StepProgressEvent
+    GeneratedSequence.from_catalog_items → commit_sequence → Command
+  PendingSequenceCommit → graph values → confirmed commit</pre>
+      <p>For explicit count, count wins over duration. Otherwise the duration target uses rounded 40-second units, with bilateral poses consuming two units. Generation defaults to 9 poses and caps at 45. Regeneration creates a child UUID in its parent’s family.</p>
+      <span class="source"><a href="../src/langchain_app/services/response_progress_middleware.py#L51">services/response_progress_middleware.py:51–95, 139–227</a> · <a href="../src/langchain_app/tools/sequence.py#L31">tools/sequence.py:31–97</a> · <a href="../src/langchain_app/services/sequence_generator.py#L233">services/sequence_generator.py:233–312</a> · <a href="../src/langchain_app/schemas/generated_sequence.py#L38">schemas/generated_sequence.py:38–58</a></span>
+    </details>
+    <details><summary>Factory and state ownership</summary><pre>session_assistant()                   # one per Streamlit session
+  get_assistant_agent()
+    cached catalog / tag / TypeSafe / SequenceGenerator resources
+    AssistantAgent                   # session-local conversation + variants
+      InMemorySaver + unique thread_id
+      _get_agent()                   # lazy model + graph construction
+
+ResponseProgress                     # producer-side ordering / commit checks
+ResponseProgressRenderer             # UI status and timing adjustment
+  ResponseExecution                  # consumer-side public event reduction
+SequenceRenderer                     # galleries, text and returned ChatMessage</pre><span class="source"><a href="../src/langchain_app/assistant.py#L37">assistant.py:37–43</a> · <a href="../src/langchain_app/dependencies.py">dependencies.py</a> · <a href="../src/langchain_app/services/assistant_agent.py#L148">services/assistant_agent.py:148–237</a></span></details>
+  </section>
+
+  <section class="panel" id="result" role="tabpanel" aria-labelledby="tab-result" hidden>
+    <div class="card"><h2>The outcome depends on whether a commit happened</h2><div class="table-wrap"><table><thead><tr><th>Path</th><th>Returned result</th><th>Visible / retained behavior</th></tr></thead><tbody>
+      <tr><td>Plain chat</td><td>content + execution; sequence=None</td><td>Text reply, completed status, no sequence gallery</td></tr>
+      <tr><td>Catalog display</td><td>catalog_items + text + execution</td><td>First explicit catalog gallery remains above the reply</td></tr>
+      <tr><td>Generate / edit succeeds</td><td>Committed view, UUID, family and selected index</td><td>Final card uses saved state; no generation is needed for replay</td></tr>
+      <tr><td>Factory fails</td><td>Error execution; no sequence</td><td>Initial “Thinking...” appears first; sanitized public error is saved</td></tr>
+      <tr><td>Failure while previewing</td><td>Error execution; sequence=None</td><td>Temporary sequence thumbnails are cleared at finalization</td></tr>
+      <tr><td>Failure after commit</td><td>Error execution + committed sequence and family</td><td>The saved sequence stays usable despite the later failure</td></tr>
+      <tr><td>Regenerate fails before commit</td><td>Error attempt; no new sequence</td><td>Caller retains old card and archives the previous attempt; producer restores prior active selection</td></tr>
+      <tr><td>Recoverable tool error</td><td>A failed step, potentially a complete request</td><td>The model can recover and reply; step failure alone does not imply fatal request failure</td></tr>
+    </tbody></table></div><span class="source"><a href="../src/langchain_app/ui/sequence.py#L328">ui/sequence.py:328–356</a> · <a href="../src/langchain_app/services/assistant_agent.py#L329">services/assistant_agent.py:329–344</a> · <a href="../src/langchain_app/assistant.py#L103">assistant.py:103–123</a></span></div>
+    <div class="grid" style="margin-top:20px"><article class="card"><h3>Returned message: two kinds of snapshot</h3><pre>ChatMessage
+├─ content                    final public text
+├─ execution                  public attempt history
+│  ├─ outcome, duration, error
+│  ├─ source_sequence_uuid / sequence_uuid
+│  ├─ steps + progress
+│  └─ intermediate_messages
+├─ sequence                   selected display projection
+├─ sequence_variants          family display projections
+├─ sequence_variant_uuids     links to full stored variants
+├─ sequence_request           original generation request
+├─ selected_sequence_index
+└─ catalog_items?             full explicit display items</pre><p class="small">ExecutionSnapshot excludes final text and gallery payloads. Those belong to the other ChatMessage fields and agent state.</p></article>
+    <article class="card"><h3>Replay and controls</h3><pre>render_messages(messages)
+  for each message:
+    st.chat_message(role)
+      replay execution_history + latest execution
+      render catalog_items, if any
+      rebuild sequence views from stored UUIDs
+      render Regenerate / active / variant controls
+      render selected sequence + catalog import action
+      render final content</pre><div class="note green">Every attempt has its own request UUID. Regeneration adds to the family only after a confirmed commit; failed attempts remain in execution history.</div><p class="small">Existing UI tests cover text placement, initialization failure, preview removal, commit-then-error behavior, regeneration retry history and replay without extra model calls. This walkthrough was traced from source; it is not a captured live model run.</p><span class="source"><a href="../tests/test_response_progress_ui.py#L61">tests/test_response_progress_ui.py:61–301</a></span></article></div>
+  </section>
+  <footer class="footer">Repository source walkthrough · 16 October 2026 · Entry: <a href="../src/langchain_app/ui/sequence.py#L276">src/langchain_app/ui/sequence.py:276</a> · Source links identify files and line numbers; browser line navigation depends on the viewer.</footer>
+</main>
+<script>
+const tabs=[...document.querySelectorAll('[data-tab]')];
+function chooseTab(id){tabs.forEach(b=>{const active=b.dataset.tab===id;b.setAttribute('aria-selected',active);b.tabIndex=active?0:-1});document.querySelectorAll('.panel').forEach(p=>p.hidden=p.id!==id)}
+tabs.forEach((b,i)=>{b.addEventListener('click',()=>chooseTab(b.dataset.tab));b.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;chooseTab(tabs[n].dataset.tab);tabs[n].focus()}})});
+document.querySelectorAll('[data-phase]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-phase]').forEach(x=>x.setAttribute('aria-pressed',x===b));document.querySelectorAll('[data-chapter]').forEach(x=>x.hidden=x.dataset.chapter!==b.dataset.phase)}));
+const E=(type,detail,effect={},payload='')=>({type,detail,effect,payload});
+const start=()=>E('RequestStartedEvent','Accept this request and record its source UUID. The status already exists before the stream starts.');
+const think=()=>E('StepStartedEvent','Create a progress row and label the status “Thinking...”.',{status:'Thinking...'},'code="thinking"');
+const thought=()=>E('StepFinishedEvent','Close the thinking step. Final public text or a tool call may follow.',{},'outcome="ok"');
+const gen=()=>E('StepStartedEvent','Start the generation step. No sequence has been committed.',{status:'Generating sequence...'},'code="generating_sequence"');
+const pose=(n)=>E('SequenceElementEvent','Convert the item into a thumbnail, append it and redraw the entire provisional sequence.',{pose:n},'order='+n);
+const count=(n)=>E('StepProgressEvent','Update the progress row and status counter. This event does not change the thumbnail gallery.',{status:'Generating sequence... '+n+'/3 poses'},'completed='+n+', total=3');
+const commit=()=>E('SequenceCommittedEvent','The graph state is confirmed. Fetch the complete saved variant and replace the provisional view.',{commit:true},'sequence_uuid="variant-A"');
+const genDone=()=>E('StepFinishedEvent','Close the generation step after commit confirmation.',{status:'Thinking...'},'outcome="ok"');
+const prep=()=>E('StepStartedEvent','Start the public reply preparation row.',{status:'Preparing response...'},'code="preparing_response"');
+const final=(text)=>E('AssistantMessageEvent','Append a whole final public message to final_texts, then rewrite text_output.',{text},'purpose="final"');
+const done=()=>E('StepFinishedEvent','Close the public reply preparation row.',{status:'Thinking...'},'outcome="ok"');
+const terminal=(error=false)=>E('RequestFinishedEvent',error?'Store a terminal error. Later events will be rejected. Any committed variant remains available.':'Store a complete terminal result. Collapse the progress area and retain the final duration.',{terminal:error?'error':'complete'},'outcome="'+(error?'error':'complete')+'"');
+const cleanup=()=>E('Finalize / return','Call progress.finish(). Clear sequence_output only if no committed view exists; package ChatMessage and let the caller save it.',{cleanup:true},'method action · not an event');
+const failStep=()=>E('StepFinishedEvent','Record a failed active step. The producer closes open work before emitting its terminal error.',{status:'Could not complete this step.'},'outcome="error"');
+const scenarios={
+ generate:[start(),think(),thought(),gen(),count(0),pose(1),count(1),pose(2),count(2),pose(3),count(3),commit(),genDone(),think(),thought(),prep(),final('Your sequence is ready.'),done(),terminal(),cleanup()],
+ chat:[start(),think(),thought(),prep(),final('How can I help with your practice?'),done(),terminal(),cleanup()],
+ catalog:[start(),think(),thought(),E('StepStartedEvent','Start the explicit display tool step.',{status:'Showing catalog items...'},'code="showing_catalog_items"'),E('CatalogItemsDisplayedEvent','Deep-copy verified items and draw the catalog gallery. Search must already have verified these items; search events are omitted here.',{catalog:true},'items=[verified item 1, verified item 2]'),E('StepFinishedEvent','Finish the catalog display step.',{status:'Thinking...'},'outcome="ok"'),think(),thought(),prep(),final('Here are the matching poses.'),done(),terminal(),cleanup()],
+ before:[start(),think(),thought(),gen(),pose(1),count(1),failStep(),terminal(true),cleanup()],
+ after:[start(),think(),thought(),gen(),pose(1),pose(2),pose(3),commit(),genDone(),think(),failStep(),terminal(true),cleanup()]
+};
+let cursor=-1;const scenario=document.querySelector('#scenario');const feed=document.querySelector('#feed');
+function draw(){const list=scenarios[scenario.value];feed.replaceChildren();list.forEach((e,i)=>{const row=document.createElement('div');row.className='event-row'+(i===cursor?' active':i>cursor?' future':'');row.tabIndex=0;row.setAttribute('role','button');row.setAttribute('aria-label','Step '+(i+1)+': '+e.type);row.textContent=(e.type==='Finalize / return'?'—':String(i).padStart(2,'0'))+'  '+e.type+(e.payload?'\n    '+e.payload:'');row.style.whiteSpace='pre-wrap';row.onclick=()=>{cursor=i;draw()};row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cursor=i;draw()}};feed.append(row)});
+ let state={status:'Thinking...',poses:[],committed:false,text:'',catalog:false,terminal:null,cleared:false};list.slice(0,cursor+1).forEach(e=>{const x=e.effect;if(x.status)state.status=x.status;if(x.pose)state.poses.push(x.pose);if(x.commit){state.committed=true;state.poses=[1,2,3]}if(x.text)state.text+=x.text;if(x.catalog)state.catalog=true;if(x.terminal){state.terminal=x.terminal;state.status=x.terminal==='error'?'Could not complete request':'Completed in N s'}if(x.cleanup&&!state.committed){state.poses=[];state.cleared=true}});
+ document.querySelector('#counter').textContent=(cursor+1)+' / '+list.length;
+ document.querySelector('#event-detail').textContent=cursor<0?'The method has reserved all slots and displayed “Thinking...”. The assistant factory is the next dependency boundary.':list[cursor].detail;
+ const status=document.querySelector('#mock-status');status.textContent=state.status;status.className='status-box'+(state.terminal?' '+state.terminal:'');
+ function gallery(id,items,empty){const root=document.querySelector(id);root.replaceChildren();if(!items.length){const s=document.createElement('span');s.className=state.cleared&&id==='#mock-sequence'?'empty-removed':'placeholder';s.textContent=empty;root.append(s);return}const group=document.createElement('div');group.className='poses';items.forEach(n=>{const span=document.createElement('span');span.className='pose';span.textContent='Pose '+n;group.append(span)});root.append(group)}
+ gallery('#mock-catalog',state.catalog?[1,2]:[],'Reserved · no explicit display');gallery('#mock-sequence',state.poses,state.cleared?'Cleared · no committed sequence':'Reserved · no sequence yet');
+ if(state.poses.length){const label=document.createElement('div');label.className='small';label.textContent=state.committed?'Committed variant-A · 3 poses':'Provisional “New Sequence” · not saved';document.querySelector('#mock-sequence').prepend(label)}
+ const text=document.querySelector('#mock-text');text.textContent=state.text||'Reserved · no final public text';text.className=state.text?'':'placeholder';
+ const data=document.querySelector('#sim-state');data.textContent='sequence = '+(state.committed?'committed SequenceView':'None')+' · execution = '+(state.terminal||'in progress')+(state.cleared?' · preview removed':'');data.className='note '+(state.terminal==='error'?'red':state.committed?'green':'');
+ document.querySelector('#prev').disabled=cursor<0;document.querySelector('#next').disabled=cursor>=list.length-1;
+ const current=feed.querySelector('.active');if(current){const y=current.offsetTop-feed.firstElementChild.offsetTop;if(y<feed.scrollTop||y+current.offsetHeight>feed.scrollTop+feed.clientHeight)feed.scrollTop=Math.max(0,y-feed.clientHeight/2)}
+}
+document.querySelector('#next').onclick=()=>{cursor=Math.min(cursor+1,scenarios[scenario.value].length-1);draw()};document.querySelector('#prev').onclick=()=>{cursor=Math.max(-1,cursor-1);draw()};document.querySelector('#reset').onclick=()=>{cursor=-1;draw()};scenario.onchange=()=>{cursor=-1;draw()};chooseTab('walk');draw();
+</script>
+</body>
+</html>
