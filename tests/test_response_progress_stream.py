@@ -12,12 +12,13 @@ from pydantic import TypeAdapter
 from langchain_app.schemas import CatalogItemSchema, CatalogItemsDisplayedEvent, ResponseEvent
 from langchain_app.services.assistant_agent import AssistantAgentError
 from langchain_app.services.catalog_item import CatalogItemApiError
-from langchain_app.services.sequence_editor import insert_elements, swap_elements
+from langchain_app.services.sequence_editor import insert_elements, remove_elements, swap_elements
 from langchain_app.services.sequence_generator import SequenceGenerator
 from langchain_app.services.type_safe import TypeSafeSelectionError
 from test_assistant_agent import last_message, ToolCallingModel, assistant, pose, tool_call, tool_model
 from test_sequence_addition_tool import addition_call
 from test_sequence_insertion import pose as addition_pose, source as addition_source
+from test_sequence_removal_tool import removal_call
 from test_sequence_swap import sequence, swap_call
 
 
@@ -773,6 +774,110 @@ class ResponseProgressStreamTests(unittest.TestCase):
                 factory.assert_not_called()
                 self.assertEqual(catalog.mock_calls, [])
                 self.assertEqual(tags.mock_calls, [])
+
+    def test_removal_start_is_live_and_commit_exposes_full_state_before_empty_final(self):
+        service, source, model, factory, catalog, tags = self.generated_swap_source()
+        allow_edit, allow_reply = self.gate(), self.gate()
+        model.responses = [removal_call(source, element_ids=[
+            str(source.elements[i].element_id) for i in (3, 1)
+        ]), AIMessage(content="")]
+        original = ToolCallingModel._generate
+
+        def edit(*args, **kwargs):
+            self.wait(allow_edit)
+            return remove_elements(*args, **kwargs)
+
+        def reply(model_instance, messages, **kwargs):
+            if isinstance(last_message(messages), ToolMessage):
+                self.wait(allow_reply)
+            return original(model_instance, messages, **kwargs)
+
+        events, request_id = [], uuid4()
+        with patch("langchain_app.tools.sequence.remove_elements", side_effect=edit), patch.object(
+            ToolCallingModel, "_generate", new=reply,
+        ):
+            for event in service.stream_response_events("Remove second and fourth", request_id=request_id):
+                events.append(event)
+                if event.type == "step_started" and event.code == "updating_sequence":
+                    self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                    self.assertEqual(len(service.state["sequences"]), 1)
+                    allow_edit.set()
+                elif event.type == "sequence_committed":
+                    variant = service.get_sequence(str(event.sequence_uuid))
+                    self.assertEqual((variant.operation, variant.elements_count), ("remove", 3))
+                    self.assertEqual([e.element_id for e in variant.elements],
+                                     [source.elements[i].element_id for i in (0, 2, 4)])
+                    self.assertEqual(service.active_sequence_uuid, str(variant.uuid))
+                    self.assertEqual(service.state["sequences"][str(variant.uuid)], variant.model_dump(mode="json"))
+                    self.assertTrue(service.state["turn_operation_committed"])
+                    allow_reply.set()
+        self.assert_lifecycle(events)
+        commit, = [e for e in events if e.type == "sequence_committed"]
+        step = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+        self.assertEqual(step.title, "Removing sequence elements...")
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Removed 2 sequence elements; 3 poses in total."))
+        self.assertEqual(commit.request_id, request_id)
+        self.assertEqual((commit.step_id, commit.tool_call_id), (step.step_id, step.tool_call_id))
+        self.assertEqual(finish.tool_call_id, step.tool_call_id)
+        self.assertEqual(model.received_messages[-1][-2].tool_call_id, step.tool_call_id)
+        self.assertLess(step.event_index, commit.event_index)
+        self.assertLess(commit.event_index, finish.event_index)
+        self.assertEqual([e.code for e in events if e.type == "step_started"],
+                         ["thinking", "updating_sequence", "thinking"])
+        self.assertFalse(any(e.type in ("sequence_element", "step_progress", "catalog_items_displayed", "assistant_message")
+                             for e in events))
+        self.assertEqual(service.get_sequence(str(source.uuid)), source)
+        factory.assert_not_called()
+        self.assertEqual(catalog.mock_calls + tags.mock_calls, [])
+
+    def test_invalid_removals_finish_with_error_without_commit_or_previews(self):
+        for case in ("unknown", "all", "duplicate"):
+            with self.subTest(case=case):
+                service, source, model, factory, catalog, tags = self.generated_swap_source()
+                targets = {
+                    "unknown": [str(source.elements[0].element_id), str(uuid4())],
+                    "all": [str(e.element_id) for e in source.elements],
+                    "duplicate": [str(source.elements[0].element_id)] * 2,
+                }[case]
+                model.responses = [removal_call(source, element_ids=targets), AIMessage(content="Cannot remove these poses.")]
+                events = list(service.stream_response_events("Remove poses"))
+                self.assert_lifecycle(events)
+                step = next(e for e in events if e.type == "step_started" and e.code == "updating_sequence")
+                finish = next(e for e in events if e.type == "step_finished" and e.step_id == step.step_id)
+                self.assertEqual((step.title, finish.outcome), ("Removing sequence elements...", "error"))
+                self.assertEqual(finish.tool_call_id, step.tool_call_id)
+                self.assertFalse(any(e.type in ("sequence_committed", "sequence_element", "step_progress", "catalog_items_displayed")
+                                     for e in events))
+                self.assertEqual(service.active_sequence_uuid, str(source.uuid))
+                self.assertEqual(len(service.state["sequences"]), 1)
+                self.assertFalse(service.state["turn_operation_committed"])
+                factory.assert_not_called()
+                self.assertEqual(catalog.mock_calls + tags.mock_calls, [])
+
+    def test_removal_commit_survives_failure_of_final_model_call(self):
+        service, source, model, factory, catalog, tags = self.generated_swap_source()
+        model.responses = [removal_call(source)]
+        original = ToolCallingModel._generate
+
+        def fail_reply(model_instance, messages, **kwargs):
+            if isinstance(last_message(messages), ToolMessage):
+                raise AssistantAgentError("Model unavailable")
+            return original(model_instance, messages, **kwargs)
+
+        events = []
+        with patch.object(ToolCallingModel, "_generate", new=fail_reply):
+            with self.assertRaisesRegex(AssistantAgentError, "unavailable"):
+                events.extend(service.stream_response_events("Remove second"))
+        self.assert_lifecycle(events, outcome="error")
+        commit, = [e for e in events if e.type == "sequence_committed"]
+        finish = next(e for e in events if e.type == "step_finished" and e.step_id == commit.step_id)
+        self.assertEqual((finish.outcome, finish.summary), ("ok", "Removed 1 sequence elements; 4 poses in total."))
+        self.assertEqual(service.active_sequence_uuid, str(commit.sequence_uuid))
+        self.assertEqual(service.get_sequence(str(commit.sequence_uuid)).operation, "remove")
+        self.assertEqual(service.get_sequence(str(source.uuid)), source)
+        factory.assert_not_called()
+        self.assertEqual(catalog.mock_calls + tags.mock_calls, [])
 
     def test_swap_commit_survives_failure_of_final_model_call(self):
         service, source, model, factory, catalog, tags = self.generated_swap_source()

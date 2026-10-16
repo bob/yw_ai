@@ -1,0 +1,321 @@
+{
+  "model": "openai:gpt-6-luna",
+  "started_at": "2026-10-16T11:39:37.152804+00:00",
+  "system_prompt_sha256": "d12f158d6613039435bf66320686e840136a0703e12682aa1097561daa38f385",
+  "conditions": "Live LLM; synthetic snapshots; no external services, retries or tracing",
+  "cases": [
+    {
+      "case": "same_occurrence_by_name",
+      "request": "Удали третью асану и Tree pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "remove_sequence_elements",
+          "args": {
+            "sequence_uuid": "32ac48dc-9e4a-4483-b5c0-a9d24d58d87b",
+            "element_ids": [
+              "e3010561-3db4-405f-812f-784d6799c506"
+            ]
+          },
+          "id": "call_YnKA4tFrzotHqEz2YjjbJrzN",
+          "type": "tool_call"
+        }
+      ],
+      "tool_results": [
+        {
+          "status": "ok",
+          "uuid": "54d2be4d-b9f8-4213-a6db-68b9c95a90aa",
+          "operation": "remove",
+          "elements_count": 4,
+          "removal": {
+            "removed_count": 1,
+            "elements": [
+              {
+                "element_id": "e3010561-3db4-405f-812f-784d6799c506",
+                "name": "Tree pose",
+                "old_order": 3
+              }
+            ]
+          }
+        }
+      ],
+      "reply": "",
+      "usage": [
+        {
+          "request_id": "b4ec2956-d069-48b9-85de-3e1340283522",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3679,
+          "cached_input_tokens": 0,
+          "output_tokens": 69,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3679,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-adf6-7bd1-b77e-abce50d28778-0"
+        },
+        {
+          "request_id": "b4ec2956-d069-48b9-85de-3e1340283522",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3789,
+          "cached_input_tokens": 2991,
+          "output_tokens": 3,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 798,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-b507-7a52-8970-d902c9736de2-0"
+        }
+      ]
+    },
+    {
+      "case": "requested_explanation",
+      "request": "Удали третью асану и объясни, как изменится порядок остальных",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "remove_sequence_elements",
+          "args": {
+            "sequence_uuid": "0a69302d-61d5-47c3-a190-d6aa3cc45aaa",
+            "element_ids": [
+              "70bed9f2-2742-4fed-a36d-b99711cda9b2"
+            ]
+          },
+          "id": "call_0pu4D26RjGAXDDIxk1CsTPI8",
+          "type": "tool_call"
+        }
+      ],
+      "tool_results": [
+        {
+          "status": "ok",
+          "uuid": "5b2cb0d1-a717-4d9e-819b-e69f8e557dca",
+          "operation": "remove",
+          "elements_count": 4,
+          "removal": {
+            "removed_count": 1,
+            "elements": [
+              {
+                "element_id": "70bed9f2-2742-4fed-a36d-b99711cda9b2",
+                "name": "Tree pose",
+                "old_order": 3
+              }
+            ]
+          }
+        }
+      ],
+      "reply": "После удаления третьей асаны прежние четвёртая и пятая сдвигаются на одну позицию вперёд; остальные сохраняют порядок.",
+      "usage": [
+        {
+          "request_id": "afba6a08-3e67-4c26-8951-98f90f728e9d",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3693,
+          "cached_input_tokens": 0,
+          "output_tokens": 67,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3693,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-b99f-7090-a7ff-628f3012dd54-0"
+        },
+        {
+          "request_id": "afba6a08-3e67-4c26-8951-98f90f728e9d",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3808,
+          "cached_input_tokens": 2997,
+          "output_tokens": 37,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 811,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-bf8c-7c23-9dbd-414e73b0cc1e-0"
+        }
+      ]
+    },
+    {
+      "case": "out_of_range",
+      "request": "Удали вторую и шестую асаны",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "В секвенции 5 асан, поэтому шестой нет. Ничего не удалено.",
+      "usage": [
+        {
+          "request_id": "5d19de80-5e4a-4f41-b1b4-097dc3640aec",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3677,
+          "cached_input_tokens": 0,
+          "output_tokens": 24,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3677,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-cb3c-76e1-aa5d-231114792fc2-0"
+        }
+      ]
+    },
+    {
+      "case": "partly_unresolved",
+      "request": "Удали вторую асану и Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "В последовательности нет Warrior pose. Удалять вторую асану без уточнения нельзя: подтвердите, нужно ли удалить только её или выбрать другую асану вместо Warrior pose.",
+      "usage": [
+        {
+          "request_id": "64fafcf6-e9e6-432f-a1c8-368b27c5c46c",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3669,
+          "cached_input_tokens": 0,
+          "output_tokens": 39,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3669,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-d133-7333-a5c2-1bca61596c1d-0"
+        }
+      ]
+    },
+    {
+      "case": "remove_all_en",
+      "request": "Remove all poses",
+      "passed": false,
+      "problems": [
+        "Reply language does not match the current request"
+      ],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "Нельзя удалить все асаны: в секвенции должна остаться хотя бы одна.",
+      "usage": [
+        {
+          "request_id": "382f28f8-0762-4ca7-9544-28f54a7bd899",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3667,
+          "cached_input_tokens": 0,
+          "output_tokens": 21,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3667,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-d6f6-7a50-b50b-ab22180c0d59-0"
+        }
+      ]
+    },
+    {
+      "case": "remove_and_swap",
+      "request": "Удали вторую и поменяй первую с третьей местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "Сначала выполнить одно действие: удалить вторую асану или поменять местами первую и третью?",
+      "usage": [
+        {
+          "request_id": "3af2bc00-2162-4047-aaac-67e2c03c0d28",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3678,
+          "cached_input_tokens": 0,
+          "output_tokens": 24,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3678,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-dd2b-7882-b21d-5ff9df7fc38b-0"
+        }
+      ]
+    },
+    {
+      "case": "remove_and_replace",
+      "request": "Удали вторую и замени четвёртую на Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "Какую одну операцию выполнить первой: удалить вторую асану или заменить четвёртую на Warrior pose?\n",
+      "usage": [
+        {
+          "request_id": "0b24a215-25db-4801-940d-380c15a04a38",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3688,
+          "cached_input_tokens": 0,
+          "output_tokens": 34,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3688,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-e169-7ef2-993d-6b52a9baef06-0"
+        }
+      ]
+    },
+    {
+      "case": "remove_and_add",
+      "request": "Удали вторую и добавь две позы перед последней",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "Какую одну операцию выполнить первой: удалить вторую позу или добавить две позы перед последней?\nКакую одну операцию выполнить первой: удалить вторую позу или добавить две позы перед последней?",
+      "usage": [
+        {
+          "request_id": "5c8fc6ba-0da3-40c0-b662-021be7a80d59",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3690,
+          "cached_input_tokens": 0,
+          "output_tokens": 54,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3690,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-e6c1-72f2-96eb-acbd8da3fe1e-0"
+        }
+      ]
+    },
+    {
+      "case": "remove_and_generate",
+      "request": "Удали вторую и сгенерируй новую секвенцию из пяти асан",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "tool_results": [],
+      "reply": "Какую одну операцию выполнить первой: удалить вторую асану или сгенерировать новую секвенцию из пяти асан?\nКакую одну операцию выполнить первой: удалить вторую асану или сгенерировать новую секвенцию из пяти асан?",
+      "usage": [
+        {
+          "request_id": "4c32569d-1138-45df-ba1a-f9d93411c2b8",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "6f82a983c1dd",
+          "input_tokens": 3694,
+          "cached_input_tokens": 0,
+          "output_tokens": 64,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 3694,
+          "status": "ok",
+          "message_id": "lc_run--01a14482-ec06-7d50-90ca-534c62240fbb-0"
+        }
+      ]
+    }
+  ]
+}

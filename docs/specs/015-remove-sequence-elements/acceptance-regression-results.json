@@ -1,0 +1,428 @@
+{
+  "model": "openai:gpt-6-luna",
+  "started_at": "2026-10-16T18:41:07.149465+00:00",
+  "system_prompt_sha256": "f493cd00d8e16b85877f3a64385bc2078efaa328bbf118252a471de66eb70856",
+  "context_instructions_sha256": "404b1009c2767fae56f2d4b0035c4f3d882de7fef3a885edf202fa93669be133",
+  "prefix_version": "d66fa472e0b7",
+  "conditions": "Live LLM; offline catalog/generator/TypeSafe; no retries, prewarm, or tracing",
+  "cases": [
+    {
+      "case": "swap_positions",
+      "request": "Поменяй третью и пятую асаны местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "swap_sequence_elements",
+          "args": {
+            "sequence_uuid": "233c98fc-594d-4c90-ac73-a5fef987ff67",
+            "first_element_id": "e9647421-3ac7-4762-bfb9-258636ad8bd1",
+            "second_element_id": "d790ef30-30dc-4507-b75a-a07d8e9c620e"
+          },
+          "id": "call_WQane0Kp0ERlXvCFIhKks60I",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "",
+      "commit_count": 1
+    },
+    {
+      "case": "swap_explanation",
+      "request": "Что изменится, если поменять третью и пятую местами?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Третьей станет Corpse pose, а пятой — Tree pose; остальные позиции не изменятся. Сейчас у Tree pose включено зеркальное отражение в начале, а у Corpse pose — в конце.",
+      "commit_count": 0
+    },
+    {
+      "case": "swap_ambiguous_pronoun",
+      "request": "Поменяй её местами с последней позой",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Какую позу вы имеете в виду? Уточните её позицию.",
+      "commit_count": 0
+    },
+    {
+      "case": "swap_multiple_swaps",
+      "request": "Поменяй первую и вторую, а также третью и пятую местами",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Какую одну пару поменять местами первой: первую и вторую или третью и пятую?",
+      "commit_count": 0
+    },
+    {
+      "case": "swap_swap_and_replace",
+      "request": "Поменяй третью и пятую местами и замени вторую на Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Какую одну операцию выполнить первой: поменять местами третью и пятую асаны или заменить вторую на Warrior pose?",
+      "commit_count": 0
+    },
+    {
+      "case": "add_default_one",
+      "request": "Добавь асану",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "cc75fe76-4969-4e33-8cdd-8eda78e51bdd",
+            "count": 1,
+            "request": "Добавь асану"
+          },
+          "id": "call_LXfGaovjYIlid0IP8h9kJrJv",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 1,
+        "added_count": 1,
+        "limit_applied": false,
+        "position": 6,
+        "insert_before_element_id": null,
+        "elements": [
+          {
+            "element_id": "ee301550-9e44-4b4e-a831-b6a04781078e",
+            "order": 6
+          }
+        ]
+      }
+    },
+    {
+      "case": "add_before_third",
+      "request": "Добавь две асаны перед третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "add_sequence_elements",
+          "args": {
+            "sequence_uuid": "2c262dbc-1176-4b24-b420-2858bb37a62f",
+            "count": 2,
+            "request": "Добавь две асаны перед третьей",
+            "insert_before_element_id": "a6d854bb-c1a4-43c1-94bf-6c03dbc3a974"
+          },
+          "id": "call_tZSfzzN6g7ArRuHbz5KZbykg",
+          "type": "tool_call"
+        }
+      ],
+      "reply": "",
+      "commit_count": 1,
+      "addition": {
+        "requested_count": 2,
+        "added_count": 2,
+        "limit_applied": false,
+        "position": 3,
+        "insert_before_element_id": "a6d854bb-c1a4-43c1-94bf-6c03dbc3a974",
+        "elements": [
+          {
+            "element_id": "51c06364-9618-45c0-a39c-c897d7f8938b",
+            "order": 3
+          },
+          {
+            "element_id": "007676a1-2c49-4dd8-9125-3ce38632a9c3",
+            "order": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": "add_multiple_locations",
+      "request": "Добавь одну асану в начало и две после третьей",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Вы просите добавить асаны в два разных места. Какое одно действие выполнить первым: добавить одну асану в начало или две после третьей?",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "add_duration_only",
+      "request": "Добавь асаны ещё на пять минут",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [],
+      "reply": "Сколько асан добавить? Количество нельзя определить только по длительности.",
+      "commit_count": 0,
+      "addition": null
+    },
+    {
+      "case": "extra_generate_default",
+      "request": "Создай секвенцию",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "generate_sequence",
+          "args": {
+            "request": "Создай секвенцию",
+            "count": null,
+            "starting_catalog_item_id": null,
+            "duration_seconds": null
+          },
+          "id": "call_5PlJjlHyQ1IuAX260A5rO0OF",
+          "type": "tool_call"
+        }
+      ],
+      "tool_results": [
+        {
+          "status": "ok",
+          "uuid": "37edf7db-698d-4b18-baff-b3c1ac4ed07a",
+          "operation": "generate",
+          "elements_count": 9
+        }
+      ],
+      "reply": "",
+      "commit_count": 1,
+      "usage": [
+        {
+          "request_id": "40d885f4-26bb-4300-a5a8-0630812460a9",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4310,
+          "cached_input_tokens": 0,
+          "output_tokens": 37,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 4310,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-cfde-7562-a859-33fa62e3da39-0"
+        },
+        {
+          "request_id": "40d885f4-26bb-4300-a5a8-0630812460a9",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4612,
+          "cached_input_tokens": 3508,
+          "output_tokens": 3,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 1104,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-d443-78b3-be9c-51764fea2a0e-0"
+        }
+      ]
+    },
+    {
+      "case": "extra_browse_available",
+      "request": "Какие есть позы сидя?",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "search_catalog_items",
+          "args": {
+            "catalog_tag_names": [
+              "Position/Sitting"
+            ],
+            "limit": 50
+          },
+          "id": "call_FcsJ1dbyzVOsdUUKHCxe15CC",
+          "type": "tool_call"
+        },
+        {
+          "name": "show_catalog_items",
+          "args": {
+            "catalog_item_ids": [
+              100
+            ]
+          },
+          "id": "call_gGeX7sTtHYPqIPgk8oQeRRHe",
+          "type": "tool_call"
+        }
+      ],
+      "tool_results": [
+        {
+          "status": "ok",
+          "language": "en",
+          "returned_count": 1,
+          "limit": 50,
+          "items": [
+            {
+              "id": 100,
+              "uuid": "5b74ccc6-2658-4d58-9cf3-ad5b2ae817c9",
+              "name": "Seated forward bend",
+              "bilateral": true,
+              "catalog_tag_names": [
+                "Position/Sitting",
+                "Bend/Forward"
+              ]
+            }
+          ]
+        },
+        {
+          "status": "ok",
+          "displayed_count": 1,
+          "catalog_item_ids": [
+            100
+          ]
+        }
+      ],
+      "reply": "",
+      "commit_count": 0,
+      "usage": [
+        {
+          "request_id": "c6355311-e86b-416e-bccd-87c295d7e526",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4318,
+          "cached_input_tokens": 0,
+          "output_tokens": 27,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 4318,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-db68-7283-b22a-8dee4c40554f-0"
+        },
+        {
+          "request_id": "c6355311-e86b-416e-bccd-87c295d7e526",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4453,
+          "cached_input_tokens": 3511,
+          "output_tokens": 20,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 942,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-e6d2-72a2-9615-befee8c589db-0"
+        },
+        {
+          "request_id": "c6355311-e86b-416e-bccd-87c295d7e526",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4507,
+          "cached_input_tokens": 3646,
+          "output_tokens": 3,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 861,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-eb6f-7e71-98a9-196e35a3c9da-0"
+        }
+      ]
+    },
+    {
+      "case": "extra_replace",
+      "request": "Замени вторую асану на Warrior pose",
+      "passed": true,
+      "problems": [],
+      "tool_calls": [
+        {
+          "name": "search_catalog_items",
+          "args": {
+            "name": "Warrior pose",
+            "limit": 10
+          },
+          "id": "call_YsFmpgT9iaYLXgWktoSRDnGV",
+          "type": "tool_call"
+        },
+        {
+          "name": "replace_sequence_element",
+          "args": {
+            "sequence_uuid": "a3b7d141-8c50-4ec7-90b8-f6eb910cb403",
+            "element_id": "86a7c151-527f-4856-a50d-30f72a698334",
+            "replacement_catalog_item_id": 100
+          },
+          "id": "call_l6IQPSwuTKJbSLlEhv9BIbwj",
+          "type": "tool_call"
+        }
+      ],
+      "tool_results": [
+        {
+          "status": "ok",
+          "language": "en",
+          "returned_count": 1,
+          "limit": 10,
+          "items": [
+            {
+              "id": 100,
+              "uuid": "5f3c1533-f63e-4527-9b91-abcabfac8d32",
+              "name": "Warrior pose",
+              "bilateral": true,
+              "catalog_tag_names": [
+                "Position/Standing"
+              ]
+            }
+          ]
+        },
+        {
+          "status": "ok",
+          "uuid": "5442e828-2d58-45d7-a8c3-6b3965da7b56",
+          "operation": "replace",
+          "elements_count": 5,
+          "replacement": {
+            "element_id": "86a7c151-527f-4856-a50d-30f72a698334",
+            "order": 2,
+            "old_catalog_item": {
+              "id": 2,
+              "name": "Cat pose"
+            },
+            "new_catalog_item": {
+              "id": 100,
+              "name": "Warrior pose"
+            }
+          }
+        }
+      ],
+      "reply": "",
+      "commit_count": 1,
+      "usage": [
+        {
+          "request_id": "21567dbd-6ea1-449b-9598-f0417f7751bf",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4321,
+          "cached_input_tokens": 0,
+          "output_tokens": 24,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 4321,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-efec-7ce3-89c8-47d366ea6c06-0"
+        },
+        {
+          "request_id": "21567dbd-6ea1-449b-9598-f0417f7751bf",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4445,
+          "cached_input_tokens": 3512,
+          "output_tokens": 74,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 933,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-f3bd-7cc1-a6a3-5f5447695d06-0"
+        },
+        {
+          "request_id": "21567dbd-6ea1-449b-9598-f0417f7751bf",
+          "call_kind": "assistant",
+          "model": "gpt-6-luna",
+          "profile": "assistant",
+          "prefix_version": "d66fa472e0b7",
+          "input_tokens": 4686,
+          "cached_input_tokens": 3636,
+          "output_tokens": 3,
+          "reasoning_tokens": 0,
+          "uncached_input_tokens": 1050,
+          "status": "ok",
+          "message_id": "lc_run--01a14604-f8e7-7bf3-987b-7e2ea9804652-0"
+        }
+      ]
+    }
+  ]
+}

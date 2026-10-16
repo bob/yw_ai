@@ -114,3 +114,38 @@ Search сохраняет envelope `status`, `language`, `returned_count`, `limi
 
 Потребители различают `ok`, `no_change` и `error`. Отсутствие полного snapshot
 в content не является ошибкой, если state commit выполнен и snapshot доступен.
+
+## 7. Remove — расширение 015
+
+[`remove_sequence_elements`](../015-remove-sequence-elements/README.md) возвращает:
+
+```json
+{
+  "status": "ok",
+  "uuid": "<UUID нового варианта>",
+  "operation": "remove",
+  "elements_count": 3,
+  "removal": {
+    "removed_count": 2,
+    "elements": [
+      {"element_id": "<UUID B>", "name": "<имя B>", "old_order": 2},
+      {"element_id": "<UUID D>", "name": "<имя D>", "old_order": 4}
+    ]
+  }
+}
+```
+
+`removal.elements` содержит только удалённые вхождения в порядке исходного
+списка, независимо от порядка UUID в аргументах. Имена и `old_order` берутся
+из родителя; `removed_count` равен длине diff, `elements_count` — числу
+оставшихся элементов. Полные удалённые catalog items доступны в родителе,
+а результат хранит только оставшиеся вхождения. URLs, tags, catalog UUIDs
+и полный состав в content не дублируются. Вложенный компактный список
+`removal.elements` не является полным корневым `elements` снимка.
+
+У удаления нет успешного `no_change`: повтор удалённого UUID в новом снимке
+даёт `sequence_element_not_found`, попытка удалить всё — `would_empty_sequence`.
+Любая ошибка сохраняет исходный снимок и активный UUID. Успешное удаление
+расходует одну общую операцию независимо от числа целей. Проекция истории
+сохраняет `removal`; прежние результаты и summary не восстанавливают удалённые
+вхождения в текущем `selected_sequence` и не ограничивают Regenerate.

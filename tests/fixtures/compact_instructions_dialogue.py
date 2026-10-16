@@ -9,6 +9,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -21,7 +22,10 @@ if __name__ == "__main__":
 from fixtures.sequence_addition_dialogue import CASES as ADD_CASES, run_case as run_add
 from fixtures.sequence_swap_dialogue import CASES as SWAP_CASES, run_case as run_swap, snapshot
 from langchain_app.model_config import DEFAULT_CHAT_MODEL, chat_model_options
-from langchain_app.services.assistant_agent import AssistantAgent
+from langchain_app.services.assistant_agent import AssistantAgent, SYSTEM_PROMPT
+from langchain_app.services.prompt_cache import prefix_version
+from langchain_app.services.sequence_context import GENERATION_INSTRUCTION, SELECTED_SEQUENCE_INSTRUCTIONS
+from langchain_app.tools import ASSISTANT_TOOLS
 
 
 # name, request, expected operation (None means browsing), generator count/duration
@@ -128,6 +132,10 @@ def main():
                        disable_streaming=True, model_kwargs={"parallel_tool_calls": False},
                        **chat_model_options(args.model))
     report = {"model": args.model, "started_at": datetime.now(timezone.utc).isoformat(),
+              "system_prompt_sha256": sha256(SYSTEM_PROMPT.encode()).hexdigest(),
+              "context_instructions_sha256": sha256(SELECTED_SEQUENCE_INSTRUCTIONS.encode()).hexdigest(),
+              "prefix_version": prefix_version(SYSTEM_PROMPT, ASSISTANT_TOOLS,
+                                                context_instructions=SELECTED_SEQUENCE_INSTRUCTIONS + GENERATION_INSTRUCTION),
               "conditions": "Live LLM; offline catalog/generator/TypeSafe; no retries, prewarm, or tracing", "cases": []}
     for prefix, runner, cases in (("swap", run_swap, SWAP_CASES), ("add", run_add, ADD_CASES), ("extra", run_extra, CASES)):
         for case in cases:

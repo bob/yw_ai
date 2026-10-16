@@ -8,7 +8,7 @@ so you can immediately type the next request.
 Both paths use `AssistantAgent`, a single LangChain agent with tools in
 `langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
 `show_catalog_items`, `get_catalog_tag_names`, `replace_sequence_element`,
-`swap_sequence_elements`, and `add_sequence_elements`. Generation still uses
+`swap_sequence_elements`, `add_sequence_elements`, and `remove_sequence_elements`. Generation still uses
 the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
 tag queries, and text replies can run without generation. Both catalog endpoints
 always receive `language=en`; the assistant replies in the user's language and
@@ -29,7 +29,7 @@ candidates without changing a sequence. After searching, the assistant selects
 verified IDs with `show_catalog_items`; the selection appears as thumbnails above
 any reply, outside the progress panel. Its `catalog_items_displayed` event can
 arrive before the final text. Searching alone does not show a gallery.
-Generation, Regenerate, replacement, swapping, addition, and technique answers keep their existing
+Generation, Regenerate, replacement, swapping, addition, removal, and technique answers keep their existing
 output unless catalog browsing is separately requested. Generate and Regenerate
 commands reject catalog display. Catalog thumbnails use the same size and styles
 as sequence thumbnails, with real names as alt text and a name fallback for
@@ -110,10 +110,22 @@ History, Save and Regenerate use the existing controls, and Regenerate repeats
 the original generation request. See
 [feature 007: add sequence elements](docs/specs/007-add-sequence-elements/README.md).
 
+Ask to remove specific occurrences, for example “Remove the second and fourth
+poses”, “Remove poses two through four”, or “Remove the last two poses”. The whole
+set is resolved against the selected snapshot and removed in one operation.
+Remaining occurrences keep their IDs, relative order and actual mirror flags;
+their positions become consecutive. The result gets a new UUID in the same
+family, with the selected variant as parent. Ambiguous or missing references
+require clarification; an invalid reference blocks the whole set. At least one
+pose must remain. Removal needs no catalog search, generation or TypeSafe, and
+does not apply the 45-pose generation limit to imported snapshots. History and
+Save retain the original variant; Regenerate repeats its original generation
+request. See [feature 015: remove sequence elements](docs/specs/015-remove-sequence-elements/README.md).
+
 Each request supports one successful generation, one replacement, one pair
-swap, or one addition block. For multiple edits or combined operations, the assistant asks which to do
-first. Deleting, moving one element while shifting others, and changing
-mirroring independently are unavailable.
+swap, one addition block, or one removal set. For multiple edits or combined
+operations, the assistant asks which to do first. Moving one element while
+shifting others and changing mirroring independently are unavailable.
 
 Conversation history and variants live in one assistant's `InMemorySaver` in the
 current Streamlit session. Sessions do not share conversation state, and ordinary

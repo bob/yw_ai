@@ -1,0 +1,277 @@
+{
+  "scope": "Earlier prompts and evolving checks; final results are stored in separate files. No provider retries or tracing.",
+  "runs": [
+    {
+      "run": "015-removal-instructions-smoke",
+      "started_at": "2026-10-16T11:28:27.414618+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 2,
+      "total": 3,
+      "failed_cases": [
+        {
+          "case": "remove_all_ru",
+          "request": "Удали все асаны",
+          "problems": [
+            "Expected a text reply without any tools or changes"
+          ],
+          "reply": "Нельзя удалить все асаны: в последовательности должна остаться хотя бы одна. Какую асану оставить?",
+          "tool_calls": [
+            {
+              "name": "remove_sequence_elements",
+              "args": {
+                "sequence_uuid": "41c886e6-4e0c-400d-96af-b7870d348aba",
+                "element_ids": [
+                  "911f70e7-cf07-4175-b8ec-d8103af8d7b3",
+                  "74a70980-c971-4561-a7ae-e2002d00d802",
+                  "d967e614-14b9-4e2e-9e54-6455c4b1c615",
+                  "e8384d22-4866-4860-a7f0-335e157531cd",
+                  "c1bfc83b-6cb1-439e-a8e1-c0473253ca5a"
+                ]
+              },
+              "id": "call_m2iXnhsr6A72IHjV8rgZSXuF",
+              "type": "tool_call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "015-removal-instructions-dialogue",
+      "started_at": "2026-10-16T11:28:50.873510+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 35,
+      "total": 37,
+      "failed_cases": [
+        {
+          "case": "same_occurrence_by_name",
+          "request": "Удали третью асану и Tree pose",
+          "problems": [
+            "Expected exactly one removal call and no other tools",
+            "Expected one committed removal variant",
+            "Expected one successful tool result",
+            "Expected exactly zero final text after ordinary success"
+          ],
+          "reply": "Уточните, пожалуйста: Tree pose — это третья асана. Удалить только её или также другую асану, стоящую на третьем месте?",
+          "tool_calls": []
+        },
+        {
+          "case": "out_of_range",
+          "request": "Удали вторую и шестую асаны",
+          "problems": [
+            "Expected a text reply without any tools or changes",
+            "Active selection changed without an operation",
+            "Unexpected committed operation"
+          ],
+          "reply": "Запрос включает два удаления, но выполнено только удаление второй асаны: в текущей последовательности теперь 4 асаны, поэтому шестой нет. Уточните, какую асану удалить вместо неё.",
+          "tool_calls": [
+            {
+              "name": "remove_sequence_elements",
+              "args": {
+                "sequence_uuid": "c5f0d9ad-f629-40ed-8c64-1f784fb10578",
+                "element_ids": [
+                  "f1255024-c411-40e0-a186-d2cb89523219"
+                ]
+              },
+              "id": "call_p2DqMIoFtFERUXzlpFElt1BG",
+              "type": "tool_call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "015-instructions-regression-dialogue",
+      "started_at": "2026-10-16T11:29:20.125247+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 11,
+      "total": 12,
+      "failed_cases": [
+        {
+          "case": "swap_swap_and_replace",
+          "request": "Поменяй третью и пятую местами и замени вторую на Warrior pose",
+          "problems": [
+            "Swap must not call external services"
+          ],
+          "reply": "",
+          "tool_calls": [],
+          "error_type": "AssertionError"
+        }
+      ]
+    },
+    {
+      "run": "015-removal-instructions-corrections",
+      "started_at": "2026-10-16T11:30:19.632791+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 3,
+      "total": 4,
+      "failed_cases": [
+        {
+          "case": "remove_all_ru",
+          "request": "Удали все асаны",
+          "problems": [
+            "Expected a text reply without any tools or changes"
+          ],
+          "reply": "Нельзя удалить все асаны: в последовательности должна остаться хотя бы одна. Какие асаны оставить?",
+          "tool_calls": [
+            {
+              "name": "remove_sequence_elements",
+              "args": {
+                "sequence_uuid": "894eca26-5108-4d10-9cf9-4040cfc7ed05",
+                "element_ids": [
+                  "8f601968-e8a5-4ac1-bd8c-f02f96317c32",
+                  "ee19ca46-1d46-49b8-a023-86057c1eaa44",
+                  "76d06d37-ab0f-4f29-bfca-7c6455d7782f",
+                  "a1870f69-e030-440d-9c5f-f14c017efb6e",
+                  "9f465827-170f-4d2b-bf8c-4687083826a7"
+                ]
+              },
+              "id": "call_f6n2JiTGT0b4UBsORKC3FJUR",
+              "type": "tool_call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "015-instructions-regression-corrections",
+      "started_at": "2026-10-16T11:30:20.622190+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 1,
+      "total": 1,
+      "failed_cases": []
+    },
+    {
+      "run": "015-instructions-regression-final",
+      "started_at": "2026-10-16T11:31:22.065188+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 12,
+      "total": 12,
+      "failed_cases": []
+    },
+    {
+      "run": "015-removal-instructions-final",
+      "started_at": "2026-10-16T11:31:22.092119+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": "3e0ff20046fbbdf53ab46af5f670aab5d677a420698d130c9175145830d10406",
+      "passed": 37,
+      "total": 37,
+      "failed_cases": [],
+      "manual_findings": [
+        {
+          "case": "remove_all_en",
+          "issue": "Russian reply to an English request; language check added afterwards."
+        },
+        {
+          "case": "requested_explanation",
+          "issue": "Redundant completion preamble; corresponding check added afterwards."
+        }
+      ]
+    },
+    {
+      "run": "015-removal-instructions-verified",
+      "started_at": "2026-10-16T11:33:28.666441+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": "30a2034a9cfa510d7be15fbd2223564d7c3bf636f546e428384465e4200a49fb",
+      "passed": 34,
+      "total": 37,
+      "failed_cases": [
+        {
+          "case": "partly_unresolved",
+          "request": "Удали вторую асану и Warrior pose",
+          "problems": [
+            "Expected a text reply without any tools or changes",
+            "Active selection changed without an operation",
+            "Unexpected committed operation",
+            "Expected a useful explanation or clarification"
+          ],
+          "reply": "",
+          "tool_calls": [
+            {
+              "name": "remove_sequence_elements",
+              "args": {
+                "sequence_uuid": "b5ac6c27-3f84-4d1a-b24e-eff39cb8b3ec",
+                "element_ids": [
+                  "f9721ace-8e96-46d6-8021-161a4bfc5bb3"
+                ]
+              },
+              "id": "call_SyXJrcBLXJG3lIBrjPRYCUGI",
+              "type": "tool_call"
+            }
+          ]
+        },
+        {
+          "case": "remove_all_en",
+          "request": "Remove all poses",
+          "problems": [
+            "Reply language does not match the current request"
+          ],
+          "reply": "Удалить все асаны нельзя — в последовательности должна остаться хотя бы одна.",
+          "tool_calls": []
+        },
+        {
+          "case": "remove_and_replace",
+          "request": "Удали вторую и замени четвёртую на Warrior pose",
+          "problems": [
+            "Removal must not call external services"
+          ],
+          "error_type": "AssertionError"
+        }
+      ]
+    },
+    {
+      "run": "015-instructions-regression-verified",
+      "started_at": "2026-10-16T11:33:40.477681+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 11,
+      "total": 12,
+      "failed_cases": [
+        {
+          "case": "add_multiple_locations",
+          "request": "Добавь одну асану в начало и две после третьей",
+          "problems": [
+            "Expected 'mock' to not have been called. Called 1 times.\nCalls: [call()]."
+          ],
+          "reply": "",
+          "tool_calls": [],
+          "error_type": "AssertionError"
+        }
+      ]
+    },
+    {
+      "run": "015-removal-compound-confirmed",
+      "started_at": "2026-10-16T11:34:47.805666+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": "3ab5d8a9db392fc301dde812751cb7826afa1b9a99c3e0b14752ad6afefe923e",
+      "passed": 4,
+      "total": 4,
+      "failed_cases": []
+    },
+    {
+      "run": "015-instructions-regression-confirmed",
+      "started_at": "2026-10-16T11:34:47.834459+00:00",
+      "model": "openai:gpt-6-luna",
+      "system_prompt_sha256": null,
+      "passed": 11,
+      "total": 12,
+      "failed_cases": [
+        {
+          "case": "swap_swap_and_replace",
+          "request": "Поменяй третью и пятую местами и замени вторую на Warrior pose",
+          "problems": [
+            "Swap must not call external services"
+          ],
+          "reply": "",
+          "tool_calls": [],
+          "error_type": "AssertionError"
+        }
+      ]
+    }
+  ]
+}

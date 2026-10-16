@@ -45,6 +45,7 @@ TOOL_STEPS = {
     "replace_sequence_element": ("updating_sequence", "Updating sequence..."),
     "swap_sequence_elements": ("updating_sequence", "Swapping sequence elements..."),
     "add_sequence_elements": ("updating_sequence", "Adding sequence elements..."),
+    "remove_sequence_elements": ("updating_sequence", "Removing sequence elements..."),
 }
 
 
@@ -133,6 +134,11 @@ def _tool_result(result: ToolMessage | Command, tool_name: str) -> tuple[str, st
         if addition["limit_applied"]:
             summary += f" Limited to {MAX_SEQUENCE_ELEMENTS} elements (requested {addition['requested_count']} additions)."
         return "ok", summary
+    if tool_name == "remove_sequence_elements":
+        return "ok", (
+            f"Removed {payload['removal']['removed_count']} sequence elements; "
+            f"{payload['elements_count']} poses in total."
+        )
     return "ok", "Sequence element replaced."
 
 

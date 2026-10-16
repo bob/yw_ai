@@ -27,6 +27,7 @@ def commit_sequence(
     replacement: dict | None = None,
     swap: list[dict] | None = None,
     addition: dict | None = None,
+    removal: dict | None = None,
 ) -> Command:
     """Commit the full snapshot and its compact acknowledgement together."""
     sequence_uuid = str(sequence.uuid)
@@ -34,7 +35,10 @@ def commit_sequence(
         "status": "ok", "uuid": sequence_uuid,
         "operation": sequence.operation, "elements_count": sequence.elements_count,
     }
-    for key, facts in (("generation", generation), ("replacement", replacement), ("swap", swap), ("addition", addition)):
+    for key, facts in (
+        ("generation", generation), ("replacement", replacement), ("swap", swap),
+        ("addition", addition), ("removal", removal),
+    ):
         if facts is not None:
             result[key] = facts
     return Command(update={

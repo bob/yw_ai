@@ -46,6 +46,15 @@
 Код обозначает действие, а `title` содержит его публичный заголовок.
 Внутренний поиск генератора получает `parent_step_id` этапа генерации.
 
+Удаление [015](../015-remove-sequence-elements/README.md) использует
+`updating_sequence` с заголовком `Removing sequence elements...`.
+Успешный summary берёт K и итоговый размер из `removal.removed_count`
+и `elements_count`, например `Removed 2 sequence elements; 3 poses in total.`
+Один `sequence_committed` публикуется после доступности полного snapshot
+в state и перед `step_finished`. Удаление не создаёт предварительные
+`sequence_element`, счётчики `step_progress`, поиск или галерею каталога.
+Ожидаемая ошибка завершает этап с `error`, без commit и новой карточки.
+
 Счётчики — целые неотрицательные числа. `completed` может поступить без
 известного `total`, а `total` — до первого элемента. Если заданы оба,
 `completed <= total`. Нулевой результат поиска допустим. Счётчик относится

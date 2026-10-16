@@ -25,7 +25,9 @@ catalog items. Следующий вызов модели получает по�
 ## 2. Область изменения
 
 - Компактные сообщения для `generate_sequence`, `replace_sequence_element`,
-  `swap_sequence_elements`, `add_sequence_elements`.
+  `swap_sequence_elements`, `add_sequence_elements`; расширение
+  [015](../015-remove-sequence-elements/README.md) добавляет `remove_sequence_elements`
+  с компактным `removal` по [контракту](tool-contract.md#7-remove--расширение-015).
 - Проекция результатов `search_catalog_items` без image URLs и rigman.
 - Общий способ построения компактных результатов, чтобы новые tools
   не возвращали полный snapshot по умолчанию.
@@ -60,9 +62,11 @@ catalog items. Следующий вызов модели получает по�
 snapshots. Старые snapshots не переписываются. Для Regenerate используется
 исходный `generation_request` выбранного варианта.
 
-Сохраняются общий лимит одной операции, cap 45, проверки UUID/occurrences,
+Сохраняются общий лимит одной операции, cap 45 для генерации и добавления, проверки UUID/occurrences,
 атомарность вставки, правила поз, английский каталог и ответ на языке
 пользователя. Ошибки и `no_change` не создают новый вариант.
+Удаление не ограничивается cap 45: длинный импортированный снимок можно
+сократить без дополнительного усечения. После него сохраняется минимум одна поза.
 
 Progress middleware формирует summaries из коротких полей и состояния,
 а не ожидает `elements` в tool message. Потоковые `sequence_element`,
@@ -124,7 +128,9 @@ Progress middleware формирует summaries из коротких поле�
 [Общий helper](../../../src/langchain_app/tools/results.py) формирует компактный
 результат и возвращает его одним `Command` вместе с полным snapshot,
 активным UUID и флагом commit. Generate/Regenerate возвращают четыре поля;
-replace, swap и add добавляют только факты выполненной операции. Search
+replace, swap и add добавляют только факты выполненной операции. Добавленный
+в 015 remove использует тот же helper и передаёт только число удалённых,
+их occurrence UUIDs, имена и прежние позиции. Search
 использует allowlist полей каталога, а `latest_catalog_items` сохраняет
 image URLs для replacement и gallery. Prompt обмена читает имена из `swap`;
 для старого формата сохраняется сопоставление по occurrence ID в

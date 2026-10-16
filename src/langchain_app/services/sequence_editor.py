@@ -106,6 +106,33 @@ def insert_elements(
     return variant
 
 
+def remove_elements(
+    sequence: GeneratedSequence, *, element_ids: list[UUID], request: str,
+) -> GeneratedSequence:
+    """Remove exact occurrences together and create a detached, nonempty variant."""
+    if not sequence.elements:
+        raise SequenceEditorError("empty_sequence", "The source sequence must not be empty")
+    if not element_ids or len(set(element_ids)) != len(element_ids):
+        raise SequenceEditorError("invalid_arguments", "Select a nonempty list of unique occurrence UUIDs")
+    targets = set(element_ids)
+    source_ids = {element.element_id for element in sequence.elements}
+    if not targets.issubset(source_ids):
+        raise SequenceEditorError("sequence_element_not_found", "An occurrence is not in the selected sequence")
+    if not source_ids - targets:
+        raise SequenceEditorError("would_empty_sequence", "At least one sequence element must remain")
+
+    variant = sequence.model_copy(deep=True, update={
+        "uuid": uuid4(), "parent_uuid": sequence.uuid, "operation": "remove",
+        "operation_request": request,
+    })
+    variant.elements = [
+        element for element in variant.elements if element.element_id not in targets
+    ]
+    for order, element in enumerate(variant.elements, start=1):
+        element.order = order
+    return variant
+
+
 def replace_element(
     sequence: GeneratedSequence, *, element_id: UUID,
     replacement_catalog_item_id: int, candidates: Iterable[CatalogItemSchema],

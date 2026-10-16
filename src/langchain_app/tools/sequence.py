@@ -15,6 +15,7 @@ from langchain_app.services.catalog_errors import CatalogServiceError
 from langchain_app.services.sequence_editor import (
     SequenceEditorError,
     insert_elements,
+    remove_elements,
     replace_element,
     swap_elements,
 )
@@ -189,6 +190,57 @@ def add_sequence_elements(
 
 
 @tool
+def remove_sequence_elements(
+    sequence_uuid: UUID,
+    element_ids: Annotated[list[UUID], Field(min_length=1, strict=True)],
+    runtime: ToolRuntime[AssistantToolContext, AssistantState],
+) -> Command | ToolMessage:
+    """Remove one explicitly requested set of occurrences from the selected sequence.
+
+    Resolve the COMPLETE requested set before calling: every position must be
+    in 1..N and every name must match exactly one occurrence in the snapshot.
+    If any reference is invalid, absent or ambiguous, ask without tools; never
+    remove a valid subset or clamp an invalid position. A missing target or a
+    request to shorten the sequence requires asking which poses to remove.
+    Deduplicate references to the same occurrence and execute once, passing
+    unique occurrence UUIDs for the whole set, never positions or catalog IDs.
+    At least one occurrence must remain. No catalog search or pose selection.
+
+    For a five-pose snapshot, requests to remove second AND sixth, or zeroth
+    AND second, require clarification with ZERO calls: the whole set is invalid.
+    A missing named pose invalidates a mixed set even if another position exists.
+    If the third occurrence is the unique Tree pose, "remove third and Tree pose"
+    authorizes removing that single occurrence ONCE, without a confirmation.
+    """
+    context = runtime.context
+    if context.require_generation:
+        return tool_error(runtime, "generation_required", "This application command requires generate_sequence")
+    if context.generation_started or runtime.state.get("turn_operation_committed", False):
+        return tool_error(runtime, "operation_already_started", "Change at most one sequence per request")
+    active_uuid = runtime.state.get("active_sequence_uuid")
+    sequences = runtime.state.get("sequences", {})
+    snapshot = sequences.get(active_uuid) if active_uuid is not None else None
+    if snapshot is None:
+        return tool_error(runtime, "sequence_not_found", "Removal requires a selected sequence.")
+    source = GeneratedSequence.from_snapshot(snapshot)
+    if sequence_uuid != source.uuid:
+        return tool_error(runtime, "stale_sequence", "Use the UUID of the currently selected sequence")
+    try:
+        variant = remove_elements(source, element_ids=element_ids, request=context.user_request)
+    except SequenceEditorError as exc:
+        return tool_error(runtime, exc.code, str(exc))
+    targets = set(element_ids)
+    removed = [element for element in source.elements if element.element_id in targets]
+    return commit_sequence(runtime, variant, removal={
+        "removed_count": len(removed),
+        "elements": [
+            {"element_id": str(element.element_id), "name": element.catalog_item.name, "old_order": element.order}
+            for element in removed
+        ],
+    })
+
+
+@tool
 def replace_sequence_element(
     sequence_uuid: UUID,
     element_id: UUID,
@@ -250,6 +302,9 @@ def swap_sequence_elements(
     and second_element_id in sequence_uuid,
     creating a new variant. Intermediate positions stay fixed. Distinct
     occurrences of the same catalog item can swap. No catalog search needed.
+    A selected snapshot alone never resolves a pronoun: "Поменяй её местами
+    с последней позой" with no conversational antecedent requires asking which
+    occurrence is meant, with ZERO calls. Never guess the first occurrence.
     """
     context = runtime.context
     if context.require_generation:

@@ -220,6 +220,7 @@ class AssistantAgentTests(unittest.TestCase):
             "generate_sequence", "search_catalog_items", "get_catalog_tag_names", "replace_sequence_element",
             "swap_sequence_elements",
             "add_sequence_elements",
+            "remove_sequence_elements",
             "show_catalog_items",
         })
         for registered_tool in ASSISTANT_TOOLS:

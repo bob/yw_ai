@@ -128,7 +128,7 @@ class AssistantHistoryTests(unittest.TestCase):
         self.assertEqual(state["messages"][:len(original)], original)
         self.assertEqual(state["history_summary_calls"][0]["input_tokens"], 123)
         self.assertEqual(state["history_summary_calls"][0]["cache_read_tokens"], 32)
-        self.assertEqual(state["history_projection_version"], 1)
+        self.assertEqual(state["history_projection_version"], 2)
         self.assertEqual(events[0].type, "request_started")
         self.assertEqual(events[-1].type, "request_finished")
         service._generator_factory.assert_not_called()
