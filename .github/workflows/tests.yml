@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Offline tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LANGSMITH_TRACING: "false"
+      LANGCHAIN_TRACING_V2: "false"
+      OPENAI_API_KEY: offline-test-key
+      TYPESAFE_API_KEY: offline-test-key
+      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/yw-ai-tiktoken
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.1"
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Fetch static tokenizer data without model calls
+        run: >-
+          uv run --locked python -c
+          'import tiktoken; tiktoken.get_encoding("o200k_base"); tiktoken.get_encoding("cl100k_base")'
+      - name: Run tests without network access or inherited credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .env
+          test ! -e .streamlit/secrets.toml
+          sudo unshare --net -- env -i \
+            LANG=C.UTF-8 \
+            LANGSMITH_TRACING=false LANGCHAIN_TRACING_V2=false \
+            OPENAI_API_KEY=offline-test-key TYPESAFE_API_KEY=offline-test-key \
+            TIKTOKEN_CACHE_DIR="$TIKTOKEN_CACHE_DIR" \
+            "$PWD/.venv/bin/python" -m unittest discover -s tests -p 'test_*.py' -v
