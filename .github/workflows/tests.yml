@@ -23,7 +23,6 @@ jobs:
       LANGCHAIN_TRACING_V2: "false"
       OPENAI_API_KEY: offline-test-key
       TYPESAFE_API_KEY: offline-test-key
-      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/yw-ai-tiktoken
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,11 +36,15 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
       - name: Fetch static tokenizer data without model calls
+        env:
+          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/yw-ai-tiktoken
         run: >-
           uv run --locked python -c
           'import tiktoken; tiktoken.get_encoding("o200k_base"); tiktoken.get_encoding("cl100k_base")'
       - name: Run tests without network access or inherited credentials
         shell: bash
+        env:
+          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/yw-ai-tiktoken
         run: |
           set -euo pipefail
           test ! -e .env
