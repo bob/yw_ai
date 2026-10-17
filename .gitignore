@@ -9,4 +9,15 @@ wheels/
 # Virtual environments
 .venv
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
+.streamlit/secrets.toml.*
+
+# Local AWS configuration and macOS metadata
+/.aws/
+.DS_Store
+
+# Private deployment instructions and infrastructure configuration
+/docs/specs/lightsail_deployment.md
+/docs/specs/016-yw-ai-lightsail-deployment/
