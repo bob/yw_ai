@@ -1,0 +1,117 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yw-ai-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Deploy tested production commit over SSH
+        env:
+          LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
+          LIGHTSAIL_PORT: ${{ vars.LIGHTSAIL_PORT }}
+          APP_ROOT: ${{ vars.LIGHTSAIL_APP_ROOT }}
+          SHARED_ROOT: ${{ vars.LIGHTSAIL_SHARED_ROOT }}
+          YW_AI_SERVICE: ${{ vars.LIGHTSAIL_SERVICE }}
+          SSH_USER: ${{ secrets.LIGHTSAIL_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${LIGHTSAIL_HOST:?}" "${LIGHTSAIL_PORT:?}" "${SSH_USER:?}"
+          : "${SSH_PRIVATE_KEY:?}" "${SSH_KNOWN_HOSTS:?}"
+          [[ "$LIGHTSAIL_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$LIGHTSAIL_PORT" =~ ^[0-9]{1,5}$ ]]
+          [[ "$SSH_USER" == deploy ]]
+          [[ "$APP_ROOT" == /home/deploy/apps/yw_ai/current ]]
+          [[ "$SHARED_ROOT" == /home/deploy/apps/yw_ai/shared ]]
+          [[ "$YW_AI_SERVICE" == yw_ai.service ]]
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          umask 077
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/yw-ai-ssh.XXXXXX")
+          trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+            -o GlobalKnownHostsFile=/dev/null \
+            -o "UserKnownHostsFile=$ssh_dir/known_hosts" \
+            -i "$ssh_dir/key" -p "$LIGHTSAIL_PORT" \
+            "$SSH_USER@$LIGHTSAIL_HOST" /bin/bash -s -- \
+            "$DEPLOY_SHA" "$APP_ROOT" "$SHARED_ROOT" "$YW_AI_SERVICE" <<'REMOTE'
+          set -euo pipefail
+          deploy_sha=$1
+          app_root=$2
+          shared_root=$3
+          yw_ai_service=$4
+          [[ "$deploy_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$app_root" == /home/deploy/apps/yw_ai/current ]]
+          [[ "$shared_root" == /home/deploy/apps/yw_ai/shared ]]
+          [[ "$yw_ai_service" == yw_ai.service ]]
+          exec 9>"$shared_root/deploy.lock"
+          flock -n 9
+          cd "$app_root"
+          [[ "$(git rev-parse --show-toplevel)" == "$app_root" ]]
+          [[ "$(git remote get-url origin)" == github-yw-ai:bob/yw_ai.git ]]
+          [[ -z "$(git status --porcelain)" ]]
+          git fetch --no-tags origin master
+          latest_sha=$(git rev-parse refs/remotes/origin/master)
+          if [[ "$deploy_sha" != "$latest_sha" ]]; then
+            printf 'Skipping superseded commit %s; current branch tip is %s\n' "$deploy_sha" "$latest_sha"
+            exit 0
+          fi
+          if [[ -s "$shared_root/deployed-sha" ]]; then
+            previous_sha=$(cat "$shared_root/deployed-sha")
+          else
+            previous_sha=$(git rev-parse HEAD)
+          fi
+          [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s\n' "$previous_sha" > "$shared_root/previous-sha"
+          printf 'Deploying %s; previous successful commit %s\n' "$deploy_sha" "$previous_sha"
+          git checkout --detach "$deploy_sha"
+          export UV_PYTHON_INSTALL_DIR="$shared_root/python"
+          export UV_PROJECT_ENVIRONMENT="$shared_root/venv"
+          export UV_CACHE_DIR="$shared_root/uv-cache"
+          export UV_PYTHON_PREFERENCE=only-managed
+          export UV_CONCURRENT_DOWNLOADS=2
+          export UV_CONCURRENT_INSTALLS=1
+          export UV_CONCURRENT_BUILDS=1
+          export TIKTOKEN_CACHE_DIR="$shared_root/tiktoken-cache"
+          "$shared_root/bin/uv" sync --locked --no-dev --python 3.14 --no-python-downloads
+          "$shared_root/venv/bin/python" -c \
+            'import tiktoken; tiktoken.get_encoding("o200k_base"); tiktoken.get_encoding("cl100k_base")'
+          sudo -n /bin/systemctl restart "$yw_ai_service"
+          for attempt in {1..30}; do
+            if systemctl is-active --quiet "$yw_ai_service" && \
+              [[ "$(curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8502/_stcore/health)" == ok ]]; then
+              printf '%s\n' "$deploy_sha" > "$shared_root/deployed-sha"
+              printf 'Local Streamlit health passed for %s\n' "$deploy_sha"
+              exit 0
+            fi
+            sleep 2
+          done
+          printf 'Local health failed for %s; inspect yw_ai.service and roll back manually\n' "$deploy_sha" >&2
+          exit 1
+          REMOTE

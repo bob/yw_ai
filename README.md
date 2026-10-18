@@ -5,7 +5,11 @@ and manual runs. CI installs locked dependencies with Python 3.14 and downloads
 static tokenizer data before running `unittest` with fake models and mocked HTTP.
 The test process runs in a Linux network namespace with no external network
 access, a clean environment, dummy API keys, and LangSmith tracing disabled.
-No deployment or live model checks run in CI.
+CI does not call live models. After a successful `Tests` run for a push to
+`master`, `Deploy production` deploys that tested commit over SSH and checks the
+local Streamlit health endpoint. Pull requests and manual test runs do not
+deploy. Production credentials stay on the server; deployment uses a separate
+SSH key from the GitHub `production` environment.
 
 The Sequence Generator keeps the pose count and **Generate** at the top and a
 chat prompt at the bottom. **Generate** submits a text request such as
