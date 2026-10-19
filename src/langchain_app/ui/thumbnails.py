@@ -49,6 +49,30 @@ class ThumbnailRenderer:
                 object-fit: cover;
                 border-radius: 10px;
             }}
+            .mirror-thumbnail[data-tooltip]::after {{
+                content: attr(data-tooltip);
+                position: absolute;
+                bottom: calc(100% + 6px);
+                left: 0;
+                width: max-content;
+                max-width: min(18rem, 80vw);
+                padding: 6px 10px;
+                border-radius: 6px;
+                background: var(--st-text-color, #31333f);
+                color: var(--st-background-color, #ffffff);
+                font-size: 0.8rem;
+                line-height: 1.4;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                pointer-events: none;
+                visibility: hidden;
+            }}
+            .mirror-thumbnail[data-tooltip]:is(:hover, :focus-visible) {{
+                z-index: 1000;
+            }}
+            .mirror-thumbnail[data-tooltip]:is(:hover, :focus-visible)::after {{
+                visibility: visible;
+            }}
             .mirror-thumbnail__bracket {{
                 position: absolute;
                 top: 6px;
@@ -74,7 +98,21 @@ class ThumbnailRenderer:
         )
 
     @staticmethod
+    def _tooltip(thumbnail: Thumbnail) -> str | None:
+        order = thumbnail.get("order")
+        if order is None:
+            return None
+        name = (thumbnail.get("alt") or "").strip()
+        return f"{order}. {name}" if name else str(order)
+
+    @staticmethod
     def _thumbnail_html(thumbnail: Thumbnail) -> str:
+        tooltip = ThumbnailRenderer._tooltip(thumbnail)
+        tooltip_attributes = (
+            f' data-tooltip="{escape(tooltip, quote=True)}" tabindex="0"'
+            f' aria-label="{escape(tooltip, quote=True)}"'
+            if tooltip else ""
+        )
         brackets = ""
         if thumbnail.get("start_mirror", False):
             brackets += (
@@ -88,7 +126,7 @@ class ThumbnailRenderer:
             )
 
         return (
-            '<div class="mirror-thumbnail">'
+            f'<div class="mirror-thumbnail"{tooltip_attributes}>'
             f'<img src="{escape(thumbnail["image_url"], quote=True)}" '
             f'alt="{escape(thumbnail["alt"], quote=True)}">'
             f"{brackets}"
@@ -101,4 +139,6 @@ class ThumbnailRenderer:
                 if thumbnail["image_url"]:
                     st.html(self._thumbnail_html(thumbnail), width="content")
                 else:
-                    st.caption(thumbnail["alt"], width="content")
+                    st.caption(
+                        thumbnail["alt"], help=self._tooltip(thumbnail), width="content",
+                    )

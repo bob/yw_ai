@@ -10,7 +10,6 @@ from langchain_app.schemas.chat import ChatMessage
 from langchain_app.schemas.response_progress import (
     AssistantMessageEvent,
     ExecutionSnapshot,
-    ExecutionStepSnapshot,
     RequestFinishedEvent,
     ResponseEvent,
     SequenceCommittedEvent,
@@ -79,9 +78,13 @@ def render_execution(snapshot: ExecutionSnapshot) -> None:
         _label(snapshot), state="error" if snapshot.outcome == "error" else "complete",
         expanded=snapshot.outcome == "error",
     )
-    entries = sorted([*snapshot.steps, *snapshot.intermediate_messages], key=lambda item: item.event_index)
-    for entry in entries:
-        if isinstance(entry, ExecutionStepSnapshot):
+    # Session history can retain instances created before Streamlit reloads a module.
+    entries = [
+        *((step, True) for step in snapshot.steps),
+        *((message, False) for message in snapshot.intermediate_messages),
+    ]
+    for entry, is_step in sorted(entries, key=lambda item: item[0].event_index):
+        if is_step:
             status.markdown(_step_text(
                 entry.title, summary=entry.summary, outcome=entry.outcome,
                 duration=entry.duration_seconds,
