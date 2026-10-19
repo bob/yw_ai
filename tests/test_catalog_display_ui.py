@@ -20,7 +20,8 @@ from test_sequence_variants import APP
 
 
 def catalog_html(app):
-    return [node.proto.body for node in app.get("html") if '<div class="mirror-thumbnail">' in node.proto.body]
+    """Collect shared thumbnails, including sequence thumbnails with tooltips."""
+    return [node.proto.body for node in app.get("html") if '<div class="mirror-thumbnail"' in node.proto.body]
 
 
 class CatalogDisplayUITests(unittest.TestCase):
@@ -266,10 +267,14 @@ class CatalogDisplayUITests(unittest.TestCase):
         message = self.assert_complete(app)
         self.assertEqual(message["catalog_items"], [candidate])
         self.assertEqual(len(message["sequence"]["thumbnails"]), 3)
-        gallery = catalog_html(app)[3]
-        self.assertIn('alt="Pose 9"', gallery)
-        self.assertNotIn("bracket", gallery)
-        self.assertIn("bracket", catalog_html(app)[-1])
+        gallery = catalog_html(app.get_by_key("assistant-catalog-3"))
+        self.assertEqual(len(gallery), 1)
+        self.assertIn('alt="Pose 9"', gallery[0])
+        self.assertNotIn("bracket", gallery[0])
+        sequence = catalog_html(app.get_by_key("assistant-sequence-3"))
+        self.assertEqual(len(sequence), 3)
+        self.assertIn('alt="Pose 9"', sequence[2])
+        self.assertIn("mirror-thumbnail__bracket", sequence[2])
         self.assertNotEqual(agent.active_sequence_uuid, str(source.uuid))
 
     def test_foreign_duplicate_out_of_order_and_terminal_events_cannot_change_gallery(self):
