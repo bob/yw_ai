@@ -12,6 +12,7 @@ from fixtures.compact_tool_results import legacy_payload, source_sequence
 from langchain_app.services.assistant_history import (
     HistoryBudget, HistorySummary, HistoryTokenCounter, compact_history, summary_context,
 )
+from langchain_app.services.request_limits import MAX_REQUEST_CHARACTERS
 from test_assistant_agent import ToolCallingModel, assistant, selected_snapshot, tool_call
 
 
@@ -111,7 +112,9 @@ class AssistantHistoryTests(unittest.TestCase):
         ])
         service._catalog_tag_service.get_names.return_value = ["Position/Sitting"] * 800
         original = seed_history(service, tool_turns=True, text="gentle seated practice " * 15)
-        current = "Текущий запрос " * 1800
+        # Exercise a current turn far above the history budget, while staying
+        # inside the separate public-request security limit.
+        current = "Текущий запрос " * (MAX_REQUEST_CHARACTERS // len("Текущий запрос "))
         events = list(service.stream_response_events(current))
         self.assertEqual(len(summarizer.received_messages), 1)
         self.assertEqual(len(model.received_messages), 3)

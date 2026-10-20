@@ -40,6 +40,8 @@ from langchain_app.services.prompt_cache import (
     prefix_version,
 )
 from langchain_app.services.request_errors import public_request_error
+from langchain_app.services.request_limits import validate_request
+from langchain_app.services.request_capacity import RequestCapacityError, get_request_capacity
 from langchain_app.services.response_progress import ResponseProgress
 from langchain_app.services.response_progress_middleware import (
     model_response_progress,
@@ -355,12 +357,18 @@ class AssistantAgent:
         parent = None
         active_before = self.active_sequence_uuid
         context = None
+        capacity = None
         try:
             if regenerate_sequence_uuid is not None:
                 parent = self.get_sequence(regenerate_sequence_uuid)
                 if parent is None:
                     raise ValueError("The Regenerate source is not stored in this assistant session")
                 request = parent.generation_request
+            validate_request(request)
+            available_capacity = get_request_capacity()
+            if not available_capacity.acquire():
+                raise RequestCapacityError()
+            capacity = available_capacity
             context = AssistantToolContext(
                 generator_factory=self._generator_factory,
                 catalog_item_service=self._catalog_item_service,
@@ -406,6 +414,9 @@ class AssistantAgent:
             if isinstance(exc, (OpenAIError, GraphRecursionError)):
                 raise AssistantAgentError(f"Language model request failed: {exc}") from exc
             raise
+        finally:
+            if capacity is not None:
+                capacity.release()
 
     def stream(
         self, request: str, *, require_generation: bool = False,

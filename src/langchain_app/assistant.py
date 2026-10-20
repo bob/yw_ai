@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from langchain_app.dependencies import get_assistant_agent
 from langchain_app.schemas import ChatMessage, Language
 from langchain_app.services.assistant_agent import AssistantAgent
+from langchain_app.services.request_limits import MAX_REQUEST_CHARACTERS
 from langchain_app.ui import SequenceRenderer
 from langchain_app.ui.chat_input import focus_chat_input
 from langchain_app.ui.response_progress import (
@@ -88,9 +89,13 @@ reset_prompt = st.session_state.pop("sequence-prompt-reset", False)
 if reset_prompt:
     st.session_state["sequence-prompt"] = ""
 
+if validation_error := st.session_state.get("request_validation_error"):
+    st.error(validation_error)
+
 st.chat_input(
     "Ask about yoga, search the catalog, or generate or edit a sequence…", key="sequence-prompt",
     disabled=busy, submit_mode="disable", on_submit=submit_chat,
+    max_chars=MAX_REQUEST_CHARACTERS,
 )
 if reset_prompt:
     focus_chat_input(reset_prompt)

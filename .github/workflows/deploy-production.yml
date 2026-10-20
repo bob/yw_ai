@@ -26,11 +26,13 @@ jobs:
     steps:
       - name: Deploy tested production commit over SSH
         env:
-          LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
-          LIGHTSAIL_PORT: ${{ vars.LIGHTSAIL_PORT }}
-          APP_ROOT: ${{ vars.LIGHTSAIL_APP_ROOT }}
-          SHARED_ROOT: ${{ vars.LIGHTSAIL_SHARED_ROOT }}
-          YW_AI_SERVICE: ${{ vars.LIGHTSAIL_SERVICE }}
+          # Prefer masked environment secrets. Existing variables remain a
+          # compatibility fallback until production configuration is migrated.
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST || vars.LIGHTSAIL_HOST }}
+          LIGHTSAIL_PORT: ${{ secrets.LIGHTSAIL_PORT || vars.LIGHTSAIL_PORT }}
+          APP_ROOT: ${{ secrets.LIGHTSAIL_APP_ROOT || vars.LIGHTSAIL_APP_ROOT }}
+          SHARED_ROOT: ${{ secrets.LIGHTSAIL_SHARED_ROOT || vars.LIGHTSAIL_SHARED_ROOT }}
+          YW_AI_SERVICE: ${{ secrets.LIGHTSAIL_SERVICE || vars.LIGHTSAIL_SERVICE }}
           SSH_USER: ${{ secrets.LIGHTSAIL_SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}

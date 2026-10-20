@@ -10,6 +10,7 @@ from langchain_app.services.catalog_errors import (
     CatalogFolderNotFoundError,
     CatalogServiceError,
 )
+from langchain_app.services.http_transport import ResponseTooLargeError, bounded_get
 
 
 class CatalogClient:
@@ -38,10 +39,15 @@ class CatalogClient:
 
     def _get(self, endpoint: str, params: list[tuple[str, str]]) -> httpx.Response:
         try:
-            response = self._client.get(
+            response = bounded_get(
+                self._client,
                 f"{self._folder_url}/{endpoint}",
                 params=[("language", "en"), *params],
             )
+        except ResponseTooLargeError as exc:
+            raise self.api_error_type(
+                "Catalog API response exceeded the size limit", code="invalid_api_response",
+            ) from exc
         except httpx.HTTPError as exc:
             raise self.api_error_type("Could not reach the catalog API") from exc
         if response.status_code == httpx.codes.NOT_FOUND:

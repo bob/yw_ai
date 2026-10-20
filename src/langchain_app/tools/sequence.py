@@ -24,13 +24,14 @@ from langchain_app.services.sequence_generator import (
     generation_count,
 )
 from langchain_app.services.type_safe import TypeSafeServiceError
+from langchain_app.services.request_limits import MAX_REQUEST_CHARACTERS
 from langchain_app.tools.context import AssistantToolContext, tool_error
 from langchain_app.tools.results import commit_sequence
 
 
 @tool
 def generate_sequence(
-    request: Annotated[str, Field(min_length=1)],
+    request: Annotated[str, Field(min_length=1, max_length=MAX_REQUEST_CHARACTERS)],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
     count: Annotated[int | None, Field(
         gt=0, strict=True,
@@ -105,7 +106,7 @@ def add_sequence_elements(
         gt=0, strict=True,
         description="Requested number of NEW elements; the tool caps additions to available space.",
     )],
-    request: Annotated[str, Field(min_length=1)],
+    request: Annotated[str, Field(min_length=1, max_length=MAX_REQUEST_CHARACTERS)],
     runtime: ToolRuntime[AssistantToolContext, AssistantState],
     insert_before_element_id: UUID | None = None,
 ) -> Command | ToolMessage:

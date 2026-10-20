@@ -54,4 +54,6 @@ jobs:
             LANGSMITH_TRACING=false LANGCHAIN_TRACING_V2=false \
             OPENAI_API_KEY=offline-test-key TYPESAFE_API_KEY=offline-test-key \
             TIKTOKEN_CACHE_DIR="$TIKTOKEN_CACHE_DIR" \
-            "$PWD/.venv/bin/python" -m unittest discover -s tests -p 'test_*.py' -v
+            "$PWD/.venv/bin/python" "$PWD/scripts/test_offline.py"
+      - name: Verify browser import message boundaries with browser test doubles
+        run: node --test tests/js/sequence_import.test.mjs

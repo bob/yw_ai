@@ -1,0 +1,11 @@
+# Keep detailed exceptions in server logs, rather than visitors' browsers.
+[client]
+showErrorDetails = "none"
+
+[server]
+enableCORS = true
+enableXsrfProtection = true
+enableStaticServing = false
+
+[browser]
+gatherUsageStats = false

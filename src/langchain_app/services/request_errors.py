@@ -2,6 +2,9 @@
 
 from openai import RateLimitError
 
+from langchain_app.services.request_limits import InvalidRequestError
+from langchain_app.services.request_capacity import RequestCapacityError
+
 PUBLIC_REQUEST_ERROR = "Could not complete request. Please try again."
 _BILLING_LINK = (
     "[OpenAI billing settings]"
@@ -22,6 +25,8 @@ def public_request_error(error: BaseException) -> str:
     seen: set[int] = set()
     while current is not None and id(current) not in seen:
         seen.add(id(current))
+        if isinstance(current, (InvalidRequestError, RequestCapacityError)):
+            return str(current)
         if isinstance(current, RateLimitError) and current.status_code == 429:
             if current.code == "credit_balance_exhausted":
                 return PUBLIC_CREDITS_EXHAUSTED_ERROR

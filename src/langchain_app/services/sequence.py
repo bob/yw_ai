@@ -6,6 +6,7 @@ from typing import Self
 import httpx
 
 from langchain_app.schemas.sequence import Language, SequenceSchema
+from langchain_app.services.http_transport import ResponseTooLargeError, bounded_get
 
 
 class SequenceServiceError(Exception):
@@ -67,7 +68,9 @@ class SequenceService:
             params["name"] = name
 
         try:
-            response = self._client.get(f"{self._base_url}{path}", params=params)
+            response = bounded_get(self._client, f"{self._base_url}{path}", params=params)
+        except ResponseTooLargeError as exc:
+            raise SequenceApiError("Public sequences API response exceeded the size limit") from exc
         except httpx.HTTPError as exc:
             raise SequenceApiError("Could not reach the public sequences API") from exc
 

@@ -18,6 +18,7 @@ from langchain_app.schemas.response_progress import (
     StepStartedEvent,
 )
 from langchain_app.services.response_execution import ResponseExecution
+from langchain_app.services.request_limits import InvalidRequestError, validate_request
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,12 @@ def enqueue_response(pending: PendingResponse) -> None:
     """Callbacks run before the script redraws its disabled request controls."""
     if st.session_state.get("pending_response") is not None:
         return
+    try:
+        validate_request(pending.request)
+    except InvalidRequestError as exc:
+        st.session_state["request_validation_error"] = str(exc)
+        return
+    st.session_state.pop("request_validation_error", None)
     st.session_state["pending_response"] = pending
     if pending.message_index is None:
         st.session_state.messages.append({"role": "user", "content": pending.request})

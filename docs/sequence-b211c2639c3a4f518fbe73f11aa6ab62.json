@@ -11,7 +11,7 @@
     {
       "uuid": "39D3F4B4-E585-4D72-AC44-889965EC9670",
       "order": 1,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MTA3MzUsInB1ciI6ImJsb2JfaWQifX0=--8022a894b36e834a8c4468c3f2482b3396f6feb0/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-1.png",
       "alt": "Tadasana",
       "start_mirror": false,
       "end_mirror": false
@@ -19,7 +19,7 @@
     {
       "uuid": "2DB31922-EA31-4718-8912-F150B14DD641",
       "order": 2,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxNCwicHVyIjoiYmxvYl9pZCJ9fQ==--013fa155a93e0c1c770ba22962d26d5097e6e0e2/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-2.png",
       "alt": "Prasarita Padottanasana",
       "start_mirror": false,
       "end_mirror": false
@@ -27,7 +27,7 @@
     {
       "uuid": "2E296C32-A17F-449B-86FE-B568A32058CA",
       "order": 3,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTE5NiwicHVyIjoiYmxvYl9pZCJ9fQ==--cec77f7684db4b3b45782c3b96677730b0cc13b2/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-3.png",
       "alt": "Matsyasana",
       "start_mirror": false,
       "end_mirror": false
@@ -35,7 +35,7 @@
     {
       "uuid": "5DDFB380-50DB-4E2C-9FB5-1947204D85BE",
       "order": 4,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NjI2MiwicHVyIjoiYmxvYl9pZCJ9fQ==--d909d9d7f0f5b2b2cef00190f73d24474ea601de/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-4.png",
       "alt": "Parivritta Stambhasana",
       "start_mirror": true,
       "end_mirror": true
@@ -43,7 +43,7 @@
     {
       "uuid": "08682561-680B-4A28-94A4-57EE1D1DF6CA",
       "order": 5,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI0MiwicHVyIjoiYmxvYl9pZCJ9fQ==--224f2ae747377a7079358d4f84ff5af6bd5668e5/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-5.png",
       "alt": "Dhanurasana",
       "start_mirror": false,
       "end_mirror": false
@@ -51,7 +51,7 @@
     {
       "uuid": "3A7981D0-3EE0-4431-A868-0C482EFC782B",
       "order": 6,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxMCwicHVyIjoiYmxvYl9pZCJ9fQ==--5169292b97c7efd7b0fcf5c9f561bd4592461fe4/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-6.png",
       "alt": "Baddha Konasana",
       "start_mirror": false,
       "end_mirror": false
@@ -59,7 +59,7 @@
     {
       "uuid": "F09AA078-9F8C-405B-B63E-5D9AD88183E7",
       "order": 7,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIwNCwicHVyIjoiYmxvYl9pZCJ9fQ==--26200cbe9c5f4e44bbfe4e06cde68ce6c25c3d95/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-7.png",
       "alt": "Ustrasana",
       "start_mirror": false,
       "end_mirror": false
@@ -67,7 +67,7 @@
     {
       "uuid": "65374D71-6CFC-410D-9642-ADF23AB25474",
       "order": 8,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTIxMywicHVyIjoiYmxvYl9pZCJ9fQ==--40d252f838d06a6103eb117a8017ab3f6d8b039f/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-8.png",
       "alt": "Paschimottanasana",
       "start_mirror": false,
       "end_mirror": false
@@ -75,7 +75,7 @@
     {
       "uuid": "E1E22F34-E27B-4CC7-8C19-BF072722E340",
       "order": 9,
-      "image_url": "http://0.0.0.0:4999/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NjI2MCwicHVyIjoiYmxvYl9pZCJ9fQ==--1f105876e6c3d2cd3aced666a6d12173a91bf217/catalog-item.jpg",
+      "image_url": "https://example.com/poses/pose-9.png",
       "alt": "Jathara Parivartanasana",
       "start_mirror": true,
       "end_mirror": true

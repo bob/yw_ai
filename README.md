@@ -11,6 +11,23 @@ local Streamlit health endpoint. Pull requests and manual test runs do not
 deploy. Production credentials stay on the server; deployment uses a separate
 SSH key from the GitHub `production` environment.
 
+Security controls and the audit findings are documented in
+[017: application security hardening](docs/specs/017-application-security-hardening/README.md).
+The app remains anonymous behind the existing deployment's Basic Auth gate.
+Keep that gate on HTTP and WebSocket traffic, and prevent direct public access
+to the Streamlit backend. A public source repository does not require a public
+unauthenticated application endpoint.
+
+Chat requests are limited to 16,000 characters in both the UI and server code.
+`ASSISTANT_MAX_CONCURRENT_REQUESTS` defaults to 4 simultaneous requests per app
+process; a busy request receives a retry message without entering a queue.
+This limits concurrent work, not total spending or requests from multiple
+processes. Use proxy rate limits and provider spending controls as appropriate.
+Catalog/sequence HTTP responses are limited to 16 MiB and redirects are not
+followed. These limits preserve the existing 45-pose cap and sequence history.
+Unexpected exception details stay in server logs; normal public error messages
+remain visible. Model providers receive the requests needed to answer the user.
+
 The Sequence Generator keeps the pose count and **Generate** at the top and a
 chat prompt at the bottom. **Generate** submits a text request such as
 `Generate a yoga sequence with 12 poses.` without filling the input. You can also
@@ -207,7 +224,10 @@ This sample agent answers a weather question with a LangChain tool. LangSmith
 automatically traces the agent, model, and tool calls when tracing is enabled.
 
 Add your OpenAI and LangSmith API keys to `.env`, using `.env.example` as a guide.
-The local `.env` already enables tracing and uses the `langchain-app` project.
+The `.env.example` template disables tracing by default. Set
+`LANGSMITH_TRACING=true` to opt in to sending conversation and tool data to
+LangSmith, using the `langchain-app` project. Existing local `.env` files are
+not changed by the template.
 Then run:
 
 ```bash
