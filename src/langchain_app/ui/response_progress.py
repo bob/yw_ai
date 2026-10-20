@@ -1,7 +1,7 @@
 """Live status and replay for one assistant request's public execution history."""
 
 from dataclasses import dataclass, field
-from time import monotonic
+from time import monotonic, sleep
 from uuid import UUID, uuid4
 
 import streamlit as st
@@ -78,6 +78,13 @@ def render_execution(snapshot: ExecutionSnapshot) -> None:
         _label(snapshot), state="error" if snapshot.outcome == "error" else "complete",
         expanded=snapshot.outcome == "error",
     )
+    with status:
+        _render_execution_details(snapshot)
+    if snapshot.error_message:
+        st.error(snapshot.error_message)
+
+
+def _render_execution_details(snapshot: ExecutionSnapshot) -> None:
     # Session history can retain instances created before Streamlit reloads a module.
     entries = [
         *((step, True) for step in snapshot.steps),
@@ -85,26 +92,24 @@ def render_execution(snapshot: ExecutionSnapshot) -> None:
     ]
     for entry, is_step in sorted(entries, key=lambda item: item[0].event_index):
         if is_step:
-            status.markdown(_step_text(
+            st.markdown(_step_text(
                 entry.title, summary=entry.summary, outcome=entry.outcome,
                 duration=entry.duration_seconds,
             ))
             for update in entry.progress:
                 if update.summary:
-                    status.caption(update.summary)
+                    st.caption(update.summary)
                 if update.completed is not None:
                     count = f"{update.completed}/{update.total}" if update.total is not None else str(update.completed)
-                    status.caption(f"{count} poses")
+                    st.caption(f"{count} poses")
         else:
-            status.markdown(entry.text)
+            st.markdown(entry.text)
     if snapshot.sequence_uuid is not None:
-        status.caption("Sequence change saved in this session.")
-    if snapshot.error_message:
-        st.error(snapshot.error_message)
+        st.caption("Sequence change saved in this session.")
 
 
 class ResponseProgressRenderer:
-    """Show feedback before dependencies initialize and keep collapse state intact."""
+    """Rotate public progress in one status line and retain completed history."""
 
     def __init__(self, request_id: UUID, accepted_at: float, source_sequence_uuid: str | None = None) -> None:
         self.execution = ResponseExecution(request_id)
@@ -115,8 +120,9 @@ class ResponseProgressRenderer:
                 # Let the producer report an invalid Regenerate source publicly.
                 pass
         self.accepted_at = accepted_at
-        self.status = st.status("Thinking...", expanded=True, state="running")
-        self._rows = {}
+        self.status = st.status("Thinking...", expanded=False, state="running")
+        self._current_label = "Thinking..."
+        self._label_until = 0.0
         self._offset: float | None = None
 
     def accept(self, event: ResponseEvent) -> bool:
@@ -131,57 +137,62 @@ class ResponseProgressRenderer:
         if not self.execution.accept(event):
             return False
         if isinstance(event, StepStartedEvent):
-            self._rows[event.step_id] = self.status.empty()
-            self._draw_step(event.step_id)
-        elif isinstance(event, (StepProgressEvent, StepFinishedEvent)):
-            self._draw_step(event.step_id)
+            self._show_label(event.title)
+        elif isinstance(event, StepProgressEvent):
+            if event.summary:
+                self._show_label(event.summary)
+            else:
+                title = self.execution.starts[event.step_id].title
+                counters = [update for update in self.execution.progress[event.step_id]
+                            if update.completed is not None]
+                if counters:
+                    latest = counters[-1]
+                    title += (f" {latest.completed}/{latest.total} poses" if latest.total is not None
+                              else f" {latest.completed} poses")
+                self._show_label(title, minimum_seconds=0.0)
+        elif isinstance(event, StepFinishedEvent):
+            self._show_label(event.summary)
         elif isinstance(event, AssistantMessageEvent) and event.purpose == "intermediate":
-            self.status.markdown(event.text)
+            self._show_label(event.text)
         elif isinstance(event, SequenceCommittedEvent):
-            self.status.caption("Sequence change saved in this session.")
-        self._update_label()
+            self._show_label("Sequence change saved in this session.")
+        elif isinstance(event, RequestFinishedEvent):
+            self._update_terminal_status()
         return True
 
-    def _draw_step(self, step_id: UUID) -> None:
-        start = self.execution.starts[step_id]
-        finish = self.execution.finishes.get(step_id)
-        progress = self.execution.progress[step_id]
-        latest = progress[-1] if progress else None
-        counters = [update for update in progress if update.completed is not None]
-        counter = counters[-1] if counters else None
-        self._rows[step_id].markdown(_step_text(
-            start.title, summary=finish.summary if finish else latest.summary if latest else None,
-            outcome=finish.outcome if finish else None,
-            duration=finish.duration_seconds if finish else None,
-            completed=counter.completed if counter else None, total=counter.total if counter else None,
-        ))
+    def _wait_for_label(self) -> None:
+        remaining = self._label_until - monotonic()
+        if remaining > 0:
+            sleep(remaining)
 
-    def _update_label(self) -> None:
-        if self.execution.result is not None:
-            snapshot = self.execution.snapshot()
-            self.status.update(
-                label=_label(snapshot), state="error" if snapshot.outcome == "error" else "complete",
-                expanded=snapshot.outcome == "error",
-            )
+    def _show_label(self, label: str, *, minimum_seconds: float = 0.6) -> None:
+        label = " ".join(label.split())
+        if label == self._current_label:
             return
-        active = [step for step_id, step in self.execution.starts.items() if step_id not in self.execution.finishes]
-        title = active[-1].title if active else "Thinking..."
-        if active:
-            counters = [update for update in self.execution.progress[active[-1].step_id] if update.completed is not None]
-            if counters:
-                latest = counters[-1]
-                title += (f" {latest.completed}/{latest.total} poses" if latest.total is not None
-                          else f" {latest.completed} poses")
+        # Keep fast stages/results readable; consecutive pose counts need no pause.
+        self._wait_for_label()
         # Omitting expanded preserves the user's live expand/collapse choice.
-        self.status.update(label=title, state="running")
+        self.status.update(label=label, state="running")
+        self._current_label = label
+        self._label_until = monotonic() + minimum_seconds
+
+    def _update_terminal_status(self) -> None:
+        snapshot = self.execution.snapshot()
+        if snapshot.outcome != "error":
+            self._wait_for_label()
+        self._label_until = 0.0
+        self.status.update(
+            label=_label(snapshot), state="error" if snapshot.outcome == "error" else "complete",
+            expanded=snapshot.outcome == "error",
+        )
 
     def finish(self) -> ExecutionSnapshot:
         if self.execution.result is None:
             self.execution.fail(max(0.0, monotonic() - self.accepted_at))
-        for step_id in self.execution.starts:
-            self._draw_step(step_id)
-        self._update_label()
         snapshot = self.execution.snapshot()
+        self._update_terminal_status()
+        with self.status:
+            _render_execution_details(snapshot)
         if snapshot.error_message:
             st.error(snapshot.error_message)
         return snapshot

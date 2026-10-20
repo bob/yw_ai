@@ -10,8 +10,8 @@ from langchain_core.messages import AIMessage
 from streamlit.testing.v1 import AppTest
 
 from langchain_app.schemas.response_progress import (
-    AssistantMessageEvent, RequestStartedEvent,
-    SequenceCommittedEvent, StepStartedEvent,
+    AssistantMessageEvent, RequestFinishedEvent, RequestStartedEvent,
+    SequenceCommittedEvent, StepFinishedEvent, StepProgressEvent, StepStartedEvent,
 )
 from langchain_app.services.response_execution import ResponseExecution
 from langchain_app.services.assistant_agent import AssistantAgent
@@ -39,11 +39,27 @@ def response_layout_app():
         renderer.render_messages([st.session_state.message])
 
 
+def progress_status_app():
+    """Inspect an unfinished request without calling any agent or service."""
+    import time
+    import streamlit as st
+    from langchain_app.ui.response_progress import ResponseProgressRenderer
+
+    renderer = ResponseProgressRenderer(st.session_state.request_id, time.monotonic())
+    for event in st.session_state.events:
+        renderer.accept(event)
+    if renderer.execution.result is not None:
+        renderer.finish()
+
+
 class ResponseProgressUITests(unittest.TestCase):
     def setUp(self):
         env = patch.dict("os.environ", {"LANGSMITH_TRACING": "false"})
         env.start()
         self.addCleanup(env.stop)
+        pacing = patch("langchain_app.ui.response_progress.sleep")
+        pacing.start()
+        self.addCleanup(pacing.stop)
 
     def assert_terminal(self, app, *, outcome="complete", index=-1):
         self.assertFalse(app.exception)
@@ -57,6 +73,60 @@ class ResponseProgressUITests(unittest.TestCase):
         self.assertEqual(app.chat_input[0].proto.value, "")
         self.assertFalse(app.button(key="generate-sequence").disabled)
         return snapshot
+
+    def test_progress_messages_replace_each_other_in_status_line(self):
+        request_id, generation_id, search_id, thinking_id = (uuid4() for _ in range(4))
+        events = []
+        app = AppTest.from_function(progress_status_app)
+        app.session_state.request_id = request_id
+
+        def emit(event_class, **payload):
+            events.append(event_class(
+                request_id=request_id, event_index=len(events), elapsed_seconds=0.0, **payload,
+            ))
+
+        def check_live(label):
+            app.session_state.events = list(events)
+            app.run()
+            self.assertFalse(app.exception)
+            status = app.get("status")[0]
+            self.assertEqual(status.label, label)
+            self.assertFalse(status.proto.expanded)
+            self.assertFalse(app.markdown)
+            self.assertFalse(app.caption)
+
+        emit(StepStartedEvent, step_id=generation_id, code="generating_sequence", title="Generating sequence...")
+        emit(StepStartedEvent, step_id=search_id, parent_step_id=generation_id,
+             code="searching_catalog_items", title="Searching catalog items...")
+        check_live("Searching catalog items...")
+        # The search completes immediately, while selection is still running.
+        emit(StepFinishedEvent, step_id=search_id, outcome="ok", duration_seconds=0.2,
+             summary="Found 60 usable catalog candidates.")
+        check_live("Found 60 usable catalog candidates.")
+        emit(StepProgressEvent, step_id=generation_id, completed=1, total=9)
+        check_live("Generating sequence... 1/9 poses")
+        emit(StepFinishedEvent, step_id=generation_id, outcome="ok", duration_seconds=2.3,
+             summary="Sequence created with 9 poses.")
+        check_live("Sequence created with 9 poses.")
+        emit(StepStartedEvent, step_id=thinking_id, code="thinking", title="Thinking...")
+        check_live("Thinking...")
+        emit(AssistantMessageEvent, purpose="intermediate", text="Your sequence\nis ready.")
+        check_live("Your sequence is ready.")
+        emit(StepFinishedEvent, step_id=thinking_id, outcome="ok", duration_seconds=1.0,
+             summary="Model response received.")
+        check_live("Model response received.")
+        emit(RequestFinishedEvent, outcome="complete", duration_seconds=3.3)
+        app.session_state.events = list(events)
+        app.run()
+        self.assertFalse(app.exception)
+        status = app.get("status")[0]
+        self.assertFalse(status.proto.expanded)
+        self.assertEqual(status.proto.state, 2)
+        # All details remain available in completed history, with no external rows.
+        self.assertEqual([node.value for node in app.markdown], [node.value for node in status.markdown])
+        for text in ("Found 60 usable catalog candidates.", "Sequence created with 9 poses.",
+                     "Your sequence\nis ready."):
+            self.assertEqual(sum(text in node.value for node in status.markdown), 1)
 
     def test_plain_chat_saves_collapsed_history_and_rerun_does_not_call_model(self):
         model = ToolCallingModel(responses=[AIMessage(content="How can I help?")])
@@ -171,7 +241,7 @@ class ResponseProgressUITests(unittest.TestCase):
         ) as chat, patch("streamlit.form_submit_button", wraps=st.form_submit_button) as generate:
             def failed_factory(*args):
                 self.assertEqual(statuses.call_args.args[0], "Thinking...")
-                self.assertTrue(statuses.call_args.kwargs["expanded"])
+                self.assertFalse(statuses.call_args.kwargs["expanded"])
                 self.assertTrue(chat.call_args.kwargs["disabled"])
                 self.assertTrue(generate.call_args.kwargs["disabled"])
                 time.sleep(0.02)
@@ -376,12 +446,46 @@ class ResponseExecutionTests(unittest.TestCase):
             renderer = ResponseProgressRenderer(request_id, time.monotonic())
             renderer.accept(StepStartedEvent(
                 request_id=request_id, event_index=0, elapsed_seconds=0.0,
-                step_id=step_id, code="thinking", title="Thinking...",
+                step_id=step_id, code="generating_sequence", title="Generating sequence...",
             ))
             self.assertNotIn("expanded", status.return_value.update.call_args.kwargs)
             renderer.finish()
             self.assertEqual(status.return_value.update.call_args.kwargs["state"], "error")
             self.assertTrue(status.return_value.update.call_args.kwargs["expanded"])
+
+    def test_fast_results_have_time_to_display_but_pose_counts_do_not_wait(self):
+        request_id, generation_id, search_id = uuid4(), uuid4(), uuid4()
+        clock = [100.0]
+
+        def advance(seconds):
+            clock[0] += seconds
+
+        with patch("langchain_app.ui.response_progress.st.status"), patch(
+            "langchain_app.ui.response_progress.monotonic", side_effect=lambda: clock[0],
+        ), patch("langchain_app.ui.response_progress.sleep", side_effect=advance) as pause:
+            renderer = ResponseProgressRenderer(request_id, clock[0])
+            events = [
+                StepStartedEvent(step_id=generation_id, code="generating_sequence", title="Generating sequence...",
+                                 request_id=request_id, event_index=0, elapsed_seconds=0.0),
+                StepStartedEvent(step_id=search_id, parent_step_id=generation_id,
+                                 code="searching_catalog_items", title="Searching catalog items...",
+                                 request_id=request_id, event_index=1, elapsed_seconds=0.0),
+                StepFinishedEvent(step_id=search_id, outcome="ok", duration_seconds=0.2,
+                                  summary="Found 60 usable catalog candidates.",
+                                  request_id=request_id, event_index=2, elapsed_seconds=0.2),
+                StepProgressEvent(step_id=generation_id, completed=0, total=9,
+                                  request_id=request_id, event_index=3, elapsed_seconds=0.2),
+            ]
+            for event in events:
+                renderer.accept(event)
+            self.assertEqual(pause.call_count, 3)
+            self.assertTrue(all(abs(call.args[0] - 0.6) < 0.001 for call in pause.call_args_list))
+            pause.reset_mock()
+            renderer.accept(StepProgressEvent(
+                request_id=request_id, event_index=4, elapsed_seconds=0.3,
+                step_id=generation_id, completed=1, total=9,
+            ))
+            pause.assert_not_called()
 
 
 if __name__ == "__main__":
