@@ -1,246 +1,82 @@
-# LangChain app
+# Yoga Sequence Generator
 
-GitHub Actions runs the `Tests` workflow for pushes to `master`, pull requests,
-and manual runs. CI installs locked dependencies with Python 3.14 and downloads
-static tokenizer data before running `unittest` with fake models and mocked HTTP.
-The test process runs in a Linux network namespace with no external network
-access, a clean environment, dummy API keys, and LangSmith tracing disabled.
-CI does not call live models. After a successful `Tests` run for a push to
-`master`, `Deploy production` deploys that tested commit over SSH and checks the
-local Streamlit health endpoint. Pull requests and manual test runs do not
-deploy. Production credentials stay on the server; deployment uses a separate
-SSH key from the GitHub `production` environment.
+A conversational assistant for building yoga sequences from an external Asana
+Catalog. Generate a routine, browse poses, and refine the result through chat.
 
-Security controls and the audit findings are documented in
-[017: application security hardening](docs/specs/017-application-security-hardening/README.md).
-The app remains anonymous behind the existing deployment's Basic Auth gate.
-Keep that gate on HTTP and WebSocket traffic, and prevent direct public access
-to the Streamlit backend. A public source repository does not require a public
-unauthenticated application endpoint.
+[Try the app at ai.yogaworkout.app](https://ai.yogaworkout.app)
 
-Chat requests are limited to 16,000 characters in both the UI and server code.
-`ASSISTANT_MAX_CONCURRENT_REQUESTS` defaults to 4 simultaneous requests per app
-process; a busy request receives a retry message without entering a queue.
-This limits concurrent work, not total spending or requests from multiple
-processes. Use proxy rate limits and provider spending controls as appropriate.
-Catalog/sequence HTTP responses are limited to 16 MiB and redirects are not
-followed. These limits preserve the existing 45-pose cap and sequence history.
-Unexpected exception details stay in server logs; normal public error messages
-remain visible. Model providers receive the requests needed to answer the user.
+<video src="docs/streamlit-assistant-2026-10-20-16-40-40.webm" controls playsinline width="100%"></video>
 
-The Sequence Generator keeps the pose count and **Generate** at the top and a
-chat prompt at the bottom. **Generate** submits a text request such as
-`Generate a yoga sequence with 12 poses.` without filling the input. You can also
-type a request directly. After each response, the input is cleared and focused
-so you can immediately type the next request.
-Both paths use `AssistantAgent`, a single LangChain agent with tools in
-`langchain_app.tools`: `generate_sequence`, `search_catalog_items`,
-`show_catalog_items`, `get_catalog_tag_names`, `replace_sequence_element`,
-`swap_sequence_elements`, `add_sequence_elements`, and `remove_sequence_elements`. Generation still uses
-the `SequenceGenerator` service and streams poses into the UI. Catalog searches,
-tag queries, and text replies can run without generation. Both catalog endpoints
-always receive `language=en`; the assistant replies in the user's language and
-keeps item names and tags exactly as returned by the API.
+[Watch the demo (WebM)](docs/streamlit-assistant-2026-10-20-16-40-40.webm)
 
-Ask for a specific first pose when generating a sequence, for example
-“Generate 12 poses, starting with Tree pose.” The assistant resolves the real
-catalog item and passes `starting_catalog_item_id`; it overrides the random start
-and does not require `Other/Starting`. Without an explicit first pose, starting
-positions are chosen with probabilities of 10% lying, 60% sitting, and 30% standing,
-then a pose is chosen randomly within that position. After a lying start, the
-second pose must be lying on the back. After a standing start, the second pose
-must not be lying, with standing preferred.
-See [feature 004: starting sequence element](docs/specs/004-starting-sequence-element/README.md).
+## Features
 
-Ask to browse catalog poses, ask which poses are available, or find replacement
-candidates without changing a sequence. After searching, the assistant selects
-verified IDs with `show_catalog_items`; the selection appears as thumbnails above
-any reply, outside the progress panel. Its `catalog_items_displayed` event can
-arrive before the final text. Searching alone does not show a gallery.
-Generation, Regenerate, replacement, swapping, addition, removal, and technique answers keep their existing
-output unless catalog browsing is separately requested. Generate and Regenerate
-commands reject catalog display. Catalog thumbnails use the same size and styles
-as sequence thumbnails, with real names as alt text and a name fallback for
-missing images. They have no sequence controls, metadata, or mirror brackets.
-Each message stores a detached `catalog_items` snapshot for session reruns,
-including when the model's final text fails. New searches and later selections
-leave earlier messages unchanged.
-See [feature 003: catalog item display](docs/specs/003-catalog-items-display/README.md).
+- Generate sequences by pose count or duration, with an optional starting pose.
+- Search the catalog and view poses as thumbnails.
+- Replace, swap, add, or remove poses using natural-language requests.
+- Follow live progress, compare sequence variants, and regenerate from the original prompt.
+- Save the selected sequence to your Asana Catalog account.
 
-Successful sequence operations and catalog displays need no text when the
-thumbnails fully answer the request. The assistant omits completion announcements,
-action recaps and generic offers of further help. Useful explanations, applied
-limits, errors and clarifying questions remain visible below the thumbnails,
-both during the response and in chat history, so arriving text does not move
-the gallery. A successful regeneration with no text clears the previous variant's
-reply.
+Generated sequences contain up to 45 poses. Conversation history and sequence
+variants stay in the current browser session; they do not survive a server restart.
 
-You can specify a duration in minutes instead of a pose count: an ordinary pose
-takes 40 seconds, while a mirrored (bilateral) pose takes 80 seconds for both
-sides and remains one sequence element. The generator accounts for selected
-mirrored poses while building the sequence, so 10 minutes allows up to 15
-ordinary poses, fewer with mirrored poses. The time budget rounds to the nearest
-40 seconds (halves round up), with at least one pose; the last mirrored pose can
-exceed the rounded budget by 40 seconds. An explicit pose count takes precedence
-over duration. **Every generated sequence is limited to 45 elements**, even for
-requests with a higher count or longer duration. If neither is specified, the
-agent uses 9 poses. Size calculation, explicit-count priority, and capping run in
-Python; the model supplies the requested count or duration. See
-[feature 005: sequence duration and limit](docs/specs/005-sequence-duration-and-limit/README.md)
-and [feature 013: compact system instructions](docs/specs/013-compact-system-instructions/README.md).
-**Regenerate** resends the original prompt. Set `ASSISTANT_AGENT_MODEL`
-to change the model. A nonempty `SEQUENCE_AGENT_MODEL` remains a fallback for
-existing `.env` files; the default is `openai:gpt-6-luna`.
-The agent requires `OPENAI_API_KEY` in addition to the existing
-catalog and TypeSafe settings.
+## Technology and models
 
-The agent stores complete sequence variants, including catalog IDs/UUIDs, names,
-tags, order, occurrence IDs, and mirror flags. Every model call receives the
-currently selected variant, including calls after tools and subsequent chat turns.
-**Previous Sequence**, **Next Sequence**, and **Use this sequence** select the
-context without calling the model. The active card is marked **Active sequence**.
-**Regenerate** creates a new UUID in the source variant's family and retains its
-original request. UI thumbnails and Save data are projections of the stored snapshot.
-An incomplete generation is discarded; a completed variant survives failure of
-the model's subsequent text reply.
+| Technology | Role |
+| --- | --- |
+| Python 3.14+ and uv | Application runtime and dependency management. |
+| Streamlit | Chat interface, pose galleries, sequence controls, and live progress. |
+| LangChain and LangGraph | One tool-calling assistant with conversation state and in-memory checkpoints. |
+| OpenAI GPT-6 Luna (`openai:gpt-6-luna`) | Default model for conversation, tool calls, and history summarization; configured through `ASSISTANT_AGENT_MODEL`. |
+| TypeSafe Jev (`langchain-typesafe`) | Typed decisions that select poses from catalog candidates during generation and insertion. |
+| Pydantic and HTTPX | Structured data validation and HTTP integration with Asana Catalog. |
+| LangSmith (optional) | Agent, model, and tool tracing; disabled by default. |
 
-Ask the assistant to replace one pose in the selected variant. It verifies the
-candidate against the latest catalog search and creates a new UUID in the same
-family, with the selected variant as its parent. The original remains in history;
-the replacement card includes the family's variants for Previous/Next navigation.
-Other poses and occurrence IDs stay unchanged, and the replacement's mirror flags
-follow its bilateral setting. Save uses the selected variant's UUID and catalog
-UUIDs. Replacing a pose with itself returns `no_change` without creating a variant.
-Stale variants, unverified candidates, unusable items, and duplicate poses are
-rejected. Failed searches clear previous candidates. Tools run sequentially, with
-at most one sequence change per request.
+Python services handle sequence limits, validation, and variant history. Pose
+names, tags, and images come from Asana Catalog.
 
-Ask the assistant to swap two poses in the selected variant, for example
-“Swap the third and fifth poses” or “Swap the first and last poses.” Unique pose
-names also work; repeated names or an incomplete pair require clarification.
-The swap creates a new UUID in the same family and moves the complete occurrences,
-including their IDs and mirror flags. Other positions stay unchanged. Catalog
-search, generation, and TypeSafe are not needed. The original remains in history;
-Save sends the new variant, and Regenerate repeats its original generation request.
-Swapping an occurrence with itself returns `no_change`. See
-[feature 006: swap sequence elements](docs/specs/006-swap-sequence-elements/README.md).
+## Run locally
 
-Ask to add poses to the selected variant, for example “Add two poses before the
-third”, “Add a pose at the beginning”, or “Fill to 20 elements”. The default is
-one new pose at the end. “Another 20” adds 20; “to 20” adds the difference.
-The same `SequenceGenerator` and TypeSafe select the new block with the existing
-prefix and suffix in context. The original occurrences, order and mirror flags
-stay intact. A block creates one new variant and appears as a whole after commit;
-selection progress shows the number of new poses without a provisional card.
-Additions fill only the available space within 45 elements; a full sequence
-returns `no_change`. A selection failure leaves the selected variant intact.
-History, Save and Regenerate use the existing controls, and Regenerate repeats
-the original generation request. See
-[feature 007: add sequence elements](docs/specs/007-add-sequence-elements/README.md).
+Requires Python 3.14+, [uv](https://docs.astral.sh/uv/), OpenAI and TypeSafe API
+keys, and access to a running Asana Catalog service.
 
-Ask to remove specific occurrences, for example “Remove the second and fourth
-poses”, “Remove poses two through four”, or “Remove the last two poses”. The whole
-set is resolved against the selected snapshot and removed in one operation.
-Remaining occurrences keep their IDs, relative order and actual mirror flags;
-their positions become consecutive. The result gets a new UUID in the same
-family, with the selected variant as parent. Ambiguous or missing references
-require clarification; an invalid reference blocks the whole set. At least one
-pose must remain. Removal needs no catalog search, generation or TypeSafe, and
-does not apply the 45-pose generation limit to imported snapshots. History and
-Save retain the original variant; Regenerate repeats its original generation
-request. See [feature 015: remove sequence elements](docs/specs/015-remove-sequence-elements/README.md).
+```bash
+uv sync --locked
+cp .env.example .env
+```
 
-Each request supports one successful generation, one replacement, one pair
-swap, one addition block, or one removal set. For multiple edits or combined
-operations, the assistant asks which to do first. Moving one element while
-shifting others and changing mirroring independently are unavailable.
+Set these values in `.env`:
 
-Conversation history and variants live in one assistant's `InMemorySaver` in the
-current Streamlit session. Sessions do not share conversation state, and ordinary
-reruns retain it. Recovery after a process restart or a new browser session is not
-implemented. Legacy cards with thumbnails alone remain viewable without supplying
-invented catalog data to the model.
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+TYPESAFE_API_KEY=your-typesafe-api-key
+ASANA_SERVICE_BASE_URL=http://localhost:4999
+ASANA_CATALOG_FOLDER_UUID=yoga-public-v1
+```
 
-GPT receives recent whole turns plus a cumulative summary when completed history
-exceeds its token budget. The full transcript and sequence variants remain in
-session state, and the current request and tool loop are always retained.
-Set `ASSISTANT_HISTORY_MAX_TOKENS` (8192), `ASSISTANT_HISTORY_TARGET_TOKENS`
-(4096), and `ASSISTANT_HISTORY_SUMMARY_MAX_TOKENS` (768), with
-`0 < summary_max < target < max`. These budgets include the summary; system
-instructions, tools, the selected snapshot and the current turn are separate.
-Summarization uses the same GPT model without tools, at most once per request.
-Failure preserves the previous summary and uses a bounded recent suffix.
-See [feature 010: bounded GPT history](docs/specs/010-bounded-gpt-history/README.md).
-
-Model requests keep instructions and the ordered tool schemas stable, then send
-the current selected sequence as a separate final system message. This snapshot
-is never appended to the stored transcript. OpenAI calls use a stable per-session
-`prompt_cache_key`, with separate keys for assistant and history-summary calls.
-`ASSISTANT_PROMPT_CACHE_ENABLED` defaults to `true`; setting it to `false` stops
-sending cache settings (OpenAI's automatic caching can still apply).
-For `gpt-6-luna`, requests use Chat Completions with `reasoning_effort="none"`
-and `prompt_cache_options={"mode":"implicit","ttl":"30m"}`. The optional
-`ASSISTANT_PROMPT_CACHE_RETENTION=30m` matches this default. Explicit
-unsupported settings fail at initialization. Internal `AssistantAgent.model_usage`
-records reported input, cached input, output, and reasoning tokens per request,
-including summarization; missing usage remains unknown. Cache hits and savings
-depend on the provider. The canceled feature 011's routing and local completion
-are not used. See [feature 012: GPT prompt caching](docs/specs/012-gpt-prompt-caching/README.md).
-The app, summary model, training examples, and fixture defaults share
-[the Luna configuration](src/langchain_app/model_config.py); see
-[014: GPT-6 Luna migration](docs/specs/014-gpt-6-luna/README.md).
-
-Chat, **Generate**, and **Regenerate** show a live execution block immediately.
-It follows real model and catalog work, streams provisional poses, and collapses
-when the response finishes. Public intermediate messages, completed steps, elapsed
-time, and errors remain available after reruns. Each regeneration keeps its earlier
-attempts. Request and variant controls are disabled during execution; a failed
-attempt keeps any already committed sequence available for Save. See
-[feature 002: assistant response progress](docs/specs/002-assistant-response-progress/README.md).
-
-When OpenAI reports exhausted API credits, the error explains that credits have
-run out and links to billing settings. A general quota error asks you to check
-credits and usage limits. These messages remain visible in request history; see
-[feature 008: API credit errors](docs/specs/008-api-credit-errors/README.md).
-
-This completes steps 1–7 of the first release of [feature 001: create-assistant-agent](docs/specs/001-create-assistant-agent/README.md).
+Use the catalog URL where you normally sign in. To enable **Save**, configure
+`SEQUENCE_GENERATOR_ORIGINS` on the catalog server with this app's origin; see
+[the import protocol](docs/import_generated.md).
 
 ```bash
 uv run --env-file .env streamlit run src/langchain_app/assistant.py
 ```
 
-For a detailed walkthrough from `assistant.py` through the agent, tools, services,
-state, and Save, see [how the assistant server works](docs/assistant-server-process.md)
-(in Russian).
+Try: “Generate a 10-minute sequence starting with Tree pose”, then “Swap the
+first and last poses” or “Add two seated poses at the end”.
 
-Sequence Generator's **Save** opens Asana Catalog in a new tab and transfers the
-selected sequence to its authenticated import page. Set `ASANA_SERVICE_BASE_URL`
-to the address where you sign in to the catalog (for example `http://localhost:4999`).
-On the catalog server, allow the generator's origin with
-`SEQUENCE_GENERATOR_ORIGINS=http://localhost:8502`; see
-[the import protocol](docs/import_generated.md). Save no longer writes JSON to `docs`.
+## Development
 
-This sample agent answers a weather question with a LangChain tool. LangSmith
-automatically traces the agent, model, and tool calls when tracing is enabled.
+Application code lives in [`src/langchain_app`](src/langchain_app), with agent
+tools in `tools/`, business logic in `services/`, and Streamlit views in `ui/`.
+The `*-training/` directories contain standalone learning examples.
 
-Add your OpenAI and LangSmith API keys to `.env`, using `.env.example` as a guide.
-The `.env.example` template disables tracing by default. Set
-`LANGSMITH_TRACING=true` to opt in to sending conversation and tool data to
-LangSmith, using the `langchain-app` project. Existing local `.env` files are
-not changed by the template.
-Then run:
+Tests use fake models and mocked HTTP. The offline runner is
+[`scripts/test_offline.py`](scripts/test_offline.py); it requires cached tokenizer
+data and blocks network calls. GitHub Actions runs offline tests and deploys
+successful pushes to `master`.
 
-```bash
-uv run --env-file .env src/langchain_app/langchain-training/first.py
-```
-
-To trace the second example, run:
-
-```bash
-uv run --env-file .env src/langchain_app/langchain-training/second.py
-```
-
-The runs appear in the `langchain-app` project at
-https://smith.langchain.com. The API endpoint in `.env` must use the same
-region as the LangSmith website and API key. To turn tracing off, set
-`LANGSMITH_TRACING=false` in `.env`.
+See [feature specifications](docs/specs) for implementation details and
+[security and deployment controls](docs/specs/017-application-security-hardening/README.md)
+for production setup. Set `LANGSMITH_TRACING=true` and supply `LANGSMITH_API_KEY`
+only when you want to send conversation and tool data to LangSmith.
