@@ -5,9 +5,7 @@ Catalog. Generate a routine, browse poses, and refine the result through chat.
 
 [Try the app at ai.yogaworkout.app](https://ai.yogaworkout.app)
 
-<video src="docs/streamlit-assistant-2026-10-20-16-40-40.webm" controls playsinline width="100%"></video>
-
-[Watch the demo (WebM)](docs/streamlit-assistant-2026-10-20-16-40-40.webm)
+https://github.com/user-attachments/assets/7244722f-2907-4ef7-b183-09c2c00aaacd
 
 ## Features
 
