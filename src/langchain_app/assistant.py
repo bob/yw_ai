@@ -20,6 +20,7 @@ from langchain_app.ui.response_progress import (
 
 load_dotenv()
 
+PAGE_TITLE = "Sequence Generator"
 SEQUENCE_LANGUAGE: Language = "en"
 ASANA_SERVICE_BASE_URL = os.getenv(
     "ASANA_SERVICE_BASE_URL", "http://0.0.0.0:4999"
@@ -29,7 +30,8 @@ ASANA_CATALOG_FOLDER_UUID = os.getenv(
 )
 
 
-st.title("Sequence Generator")
+st.set_page_config(page_title=PAGE_TITLE)
+st.title(PAGE_TITLE)
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("pending_response", None)
 messages = cast(list[ChatMessage], st.session_state.messages)
